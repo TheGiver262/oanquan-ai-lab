@@ -7,12 +7,14 @@ on:
     paths:
       - ".github/workflows/bang-nhan-diagnosis.yml"
       - "src/benchmarks/diagnose-bang-nhan.ts"
+      - "src/benchmarks/bang-nhan-ordering-causal.ts"
       - "src/reference/**"
       - "src/research/**"
+      - "tests/bang-nhan-*.test.ts"
       - "src/engine.ts"
 
 jobs:
-  diagnose:
+  parity:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,5 +23,26 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
-      - name: Run Bảng Nhãn ablation
-        run: npx tsx src/benchmarks/diagnose-bang-nhan.ts
+      - name: Verify experiment matches production before fix
+        run: npm test -- --run tests/bang-nhan-experiment-parity.test.ts tests/bang-nhan-ordering-regression.test.ts
+
+  causal:
+    needs: parity
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [uct, uct-pb]
+        opponent_mode: [server-baseline, fixed-opponent-ordering]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run isolated causal tournament
+        run: |
+          npx tsx src/benchmarks/bang-nhan-ordering-causal.ts \
+            --variant ${{ matrix.variant }} \
+            --opponent-mode ${{ matrix.opponent_mode }}
