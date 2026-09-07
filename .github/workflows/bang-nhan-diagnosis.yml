@@ -1,0 +1,25 @@
+name: bang-nhan-diagnosis
+
+on:
+  push:
+    branches:
+      - research/bang-nhan-root-cause
+    paths:
+      - ".github/workflows/bang-nhan-diagnosis.yml"
+      - "src/benchmarks/diagnose-bang-nhan.ts"
+      - "src/reference/**"
+      - "src/research/**"
+      - "src/engine.ts"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run Bảng Nhãn ablation
+        run: npx tsx src/benchmarks/diagnose-bang-nhan.ts
