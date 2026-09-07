@@ -5,7 +5,10 @@
   "type": "module",
   "description": "Standalone Ô Ăn Quan AI research lab: minimax, alpha-beta, self-play, opening analysis and Pie Rule experiments.",
   "license": "MIT",
-  "bin": { "oaq-ai": "dist/cli.js" },
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": "./dist/src/index.js",
+  "bin": { "oaq-ai": "dist/src/cli.js" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
