@@ -1,0 +1,44 @@
+name: research-tournament
+
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: "Even number of games per matchup"
+        required: false
+        default: "6"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/research-tournament.yml"
+      - "src/research/**"
+      - "src/reference/**"
+      - "src/benchmarks/**"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [uct, uct-pb]
+        opponent: [tham-hoa, bang-nhan, trang-nguyen]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run seat-balanced tournament
+        run: |
+          mkdir -p results
+          npm run benchmark:research -- \
+            --variant ${{ matrix.variant }} \
+            --opponent ${{ matrix.opponent }} \
+            --games ${{ inputs.games || '6' }} \
+            --out results/${{ matrix.variant }}-vs-${{ matrix.opponent }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant }}-vs-${{ matrix.opponent }}
+          path: results/${{ matrix.variant }}-vs-${{ matrix.opponent }}.json
