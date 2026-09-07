@@ -54,10 +54,9 @@ type SearchContext = {
 const NODE_BUDGET_EXHAUSTED = new Error("AI node budget exhausted");
 const TIME_BUDGET_EXHAUSTED = new Error("AI time budget exhausted");
 const DIRECTIONS = ["CW", "CCW"] as const;
-const DAN_PITS_BY_PLAYER = {
-  P0: ["B1", "B2", "B3", "B4", "B5"],
-  P1: ["T1", "T2", "T3", "T4", "T5"],
-} as const;
+const ALL_DAN_PITS: readonly ProductionAiMove["pit"][] = [
+  "B1", "B2", "B3", "B4", "B5", "T1", "T2", "T3", "T4", "T5",
+];
 
 export function chooseBangNhanExperimentMove(
   state: GameState,
@@ -95,6 +94,7 @@ export function chooseBangNhanExperimentMove(
   };
 
   const ranked = rankCandidatesWithIterativeDeepening(state, candidates, context);
+  const tieBreakByMove = new Map(ranked.map(({ candidate }) => [moveKey(candidate.move), random()]));
   ranked.sort((left, right) => {
     if (right.score !== left.score) return right.score - left.score;
     const leftBound = left.bound ?? "exact";
@@ -105,6 +105,12 @@ export function chooseBangNhanExperimentMove(
     }
     if (right.candidate.immediateGain !== left.candidate.immediateGain) {
       return right.candidate.immediateGain - left.candidate.immediateGain;
+    }
+    if (profile.mistakeRate > 0) {
+      const seededDelta =
+        (tieBreakByMove.get(moveKey(left.candidate.move)) ?? 0) -
+        (tieBreakByMove.get(moveKey(right.candidate.move)) ?? 0);
+      if (seededDelta !== 0) return seededDelta;
     }
     return moveTieBreaker(left.candidate.move) - moveTieBreaker(right.candidate.move);
   });
@@ -126,7 +132,6 @@ function minimax(
 ): number {
   if (context.now() >= context.deadlineMs) throw TIME_BUDGET_EXHAUSTED;
   context.nodeCount += 1;
-  // Preserve the production behavior exactly for the causal test: profile.nodeBudget is authoritative.
   if (context.nodeCount > context.profile.nodeBudget) throw NODE_BUDGET_EXHAUSTED;
   if (depth === 0 || state.status === "finished") {
     return evaluateProductionState(state, context.aiPlayer, context.profile);
@@ -388,8 +393,7 @@ function setCache(context: SearchContext, key: string, entry: SearchCacheEntry):
 }
 
 function moveTieBreaker(move: ProductionAiMove): number {
-  return DAN_PITS_BY_PLAYER.P0.concat(DAN_PITS_BY_PLAYER.P1).indexOf(move.pit) * 2 +
-    DIRECTIONS.indexOf(move.dir);
+  return ALL_DAN_PITS.indexOf(move.pit) * 2 + DIRECTIONS.indexOf(move.dir);
 }
 
 function moveKey(move: ProductionAiMove): string {
