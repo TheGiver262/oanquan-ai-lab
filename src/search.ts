@@ -33,7 +33,8 @@ export type SearchResult = {
   diagnostics: SearchDiagnostics;
 };
 
-type CacheEntry = { depth: number; score: number };
+type SearchBound = "exact" | "lower" | "upper";
+type CacheEntry = { depth: number; score: number; bound: SearchBound };
 type Context = {
   rootPlayer: PlayerId;
   profile: AiDifficultyProfile;
@@ -129,10 +130,15 @@ function search(state: GameState, depth: number, alpha: number, beta: number, co
   if (depth <= 0 || state.status === "finished") return evaluateState(state, context.rootPlayer, context.profile);
 
   const cacheKey = `${createStateHash(state)}:${depth}:${context.rootPlayer}`;
+  const originalAlpha = alpha;
+  const originalBeta = beta;
   const cached = context.profile.useCache ? context.cache.get(cacheKey) : undefined;
   if (cached && cached.depth >= depth) {
     context.cacheHits += 1;
-    return cached.score;
+    if (context.algorithm === "minimax" || cached.bound === "exact") return cached.score;
+    if (cached.bound === "lower") alpha = Math.max(alpha, cached.score);
+    if (cached.bound === "upper") beta = Math.min(beta, cached.score);
+    if (alpha >= beta) return cached.score;
   }
 
   const maximizing = state.currentPlayer === context.rootPlayer;
@@ -161,7 +167,16 @@ function search(state: GameState, depth: number, alpha: number, beta: number, co
       break;
     }
   }
-  if (context.profile.useCache && context.cache.size < context.profile.maxCacheEntries) context.cache.set(cacheKey, { depth, score: best });
+  if (context.profile.useCache && context.cache.size < context.profile.maxCacheEntries) {
+    const bound: SearchBound = context.algorithm === "minimax"
+      ? "exact"
+      : best <= originalAlpha
+        ? "upper"
+        : best >= originalBeta
+          ? "lower"
+          : "exact";
+    context.cache.set(cacheKey, { depth, score: best, bound });
+  }
   return best;
 }
 
