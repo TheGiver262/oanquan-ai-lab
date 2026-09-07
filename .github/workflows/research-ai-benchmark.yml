@@ -1,0 +1,44 @@
+name: Research AI Benchmark
+
+on:
+  push:
+    branches:
+      - research/mcts-vs-top-ai-2026-09-07
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+
+      - name: Typecheck research benchmark
+        run: corepack pnpm exec tsc -p scripts/benchmarks/tsconfig.research-ai.json --noEmit
+
+      - name: Bundle research benchmark
+        run: >-
+          corepack pnpm exec tsup scripts/benchmarks/research-ai-tournament.ts
+          --format esm --platform node --out-dir .tmp/research-ai --silent
+
+      - name: Run tournament
+        run: >-
+          node .tmp/research-ai/research-ai-tournament.js
+          --games 6
+          --simulations 1200
+          --rollout-plies 24
+          --max-moves 160
+          --output results/research-ai-tournament.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-ai-tournament
+          path: results/research-ai-tournament.json
