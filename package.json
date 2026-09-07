@@ -1,0 +1,22 @@
+{
+  "name": "oanquan-ai-lab",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Standalone Ô Ăn Quan AI research lab: minimax, alpha-beta, self-play, opening analysis and Pie Rule experiments.",
+  "license": "MIT",
+  "bin": { "oaq-ai": "dist/cli.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "cli": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": { "node": ">=20" }
+}
