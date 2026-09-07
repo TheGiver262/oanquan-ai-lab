@@ -1,0 +1,48 @@
+name: tham-hoa-ordering-diagnosis
+
+on:
+  push:
+    branches:
+      - research/ordering-bug-tham-hoa
+    paths:
+      - ".github/workflows/tham-hoa-ordering-diagnosis.yml"
+      - "src/benchmarks/tham-hoa-ordering-causal.ts"
+      - "src/research/iterative-ordering-experiment.ts"
+      - "src/research/bang-nhan-ordering-experiment.ts"
+      - "tests/tham-hoa-experiment-parity.test.ts"
+      - "src/reference/**"
+      - "src/engine.ts"
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Verify Thám Hoa experiment matches production before fix
+        run: npm test -- --run tests/tham-hoa-experiment-parity.test.ts
+
+  causal:
+    needs: parity
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [uct, uct-pb]
+        opponent_mode: [server-baseline, fixed-opponent-ordering]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run isolated Thám Hoa causal tournament
+        run: |
+          npx tsx src/benchmarks/tham-hoa-ordering-causal.ts \
+            --variant ${{ matrix.variant }} \
+            --opponent-mode ${{ matrix.opponent_mode }}
