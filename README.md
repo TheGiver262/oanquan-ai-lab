@@ -2,26 +2,50 @@
 
 Standalone, open-source research lab for **Ô Ăn Quan** AI.
 
-This repository is intentionally small: it contains only the classic 2-player engine needed for deterministic search, the seven AI difficulty profiles used by the main game, search/analysis code, a CLI, tests and benchmark-oriented utilities. It does **not** contain the production web app, server, auth, database, assets or private infrastructure.
+The repository intentionally contains only the classic 2-player rules/search surface, production-reference AI code, experimental algorithms, benchmarks, CLI utilities and tests. It does **not** contain the production web app, auth, lobby, database, assets or deployment infrastructure.
 
 ## What this lab is for
 
-- Compare minimax and alpha-beta search on identical game states.
-- Inspect and rank every legal move from a position.
-- Re-run the seven difficulty profiles in a standalone environment.
-- Run deterministic self-play and round-robin tournaments.
+- Compare minimax / alpha-beta and experimental search algorithms on identical states.
+- Inspect and rank legal moves.
+- Run deterministic self-play and seat-balanced tournaments.
 - Measure first-player advantage and opening concentration.
-- Test the **Pie Rule** for competitive balance.
-- Run `perft` to detect engine/search regressions.
-- Add experimental solvers such as MCTS, negamax, tablebases or learned evaluators without touching production code.
+- Test Pie Rule / alternative opening rules.
+- Run `perft` and parity tests to detect engine/search regressions.
+- Test MCTS or future solvers against the actual top production AI behavior without modifying the game repo.
 
-## Parity note
+## Production reference
 
-The board rules and move application in this repository are derived from the current classic 2-player production engine (`classic_v1`, quan value 10, refill cost 5, standard/no-first-quan/mature-quan rule profiles).
+The server-production reference is pinned to:
 
-The seven AI profile values are mirrored from the current local AI configuration as of September 2026.
+```text
+TheGiver262/O_an_quan
+commit 4984701ce151ee270a6a5ba5fc9211a6ec2b6996
+```
 
-The lab search implementation is intentionally independent and inspectable. It is **not yet guaranteed to be byte-for-byte decision-compatible** with production `apps/web/src/game/ai-player.ts`, because production also contains opening-book/endgame and tuning details. Before the main game imports this package, export a production parity corpus and make the regression suite pass.
+The top-three reference behavior mirrors `apps/server/src/match/classic-ai-player.ts`, not the older browser-only approximation.
+
+- **Thám Hoa** and **Bảng Nhãn** use the production iterative-deepening alpha-beta pipeline, opening book, move ordering, transposition cache and their production budgets.
+- **Trạng Nguyên** uses the production `searchTrangNguyenBestFirst(...)` path, including root W/D/L bounds and optional learning-based root filtering.
+- `tests/server-production-parity.test.ts` ports production invariants/expected moves as parity guards.
+
+### `production-live` vs `production-max`
+
+`production-live` preserves intentional production mistake rates:
+
+- Thám Hoa: 5%
+- Bảng Nhãn: 1%
+- Trạng Nguyên: 0%
+
+`production-max` suppresses the intentional Thám Hoa/Bảng Nhãn mistakes while leaving the search budgets and algorithm unchanged.
+
+Trạng Nguyên learning memory is file-backed in the real server. The lab accepts a snapshot with `--learning-file <snapshot.json>`. If no snapshot is supplied, a Trạng Nguyên result is explicitly marked:
+
+```text
+baselineIntegrity: code-parity-no-live-learning-snapshot
+```
+
+Do **not** call that result a complete live-strength comparison if the deployed server currently has `OAQ_TRANG_NGUYEN_LEARNING_PATH` enabled. With a matching snapshot loaded, the result can be marked `full-code-parity`.
 
 ## Setup
 
@@ -31,6 +55,47 @@ npm test
 npm run typecheck
 npm run build
 ```
+
+## Research benchmark against server production AI
+
+```bash
+npm run benchmark:server -- \
+  --variant uct-pb \
+  --opponent trang-nguyen \
+  --production-mode production-live \
+  --games 20
+```
+
+Maximum-strength comparison for Thám Hoa/Bảng Nhãn:
+
+```bash
+npm run benchmark:server -- \
+  --variant uct-pb \
+  --opponent bang-nhan \
+  --production-mode production-max \
+  --games 20
+```
+
+With a Trạng Nguyên learning snapshot:
+
+```bash
+npm run benchmark:server -- \
+  --variant uct-pb \
+  --opponent trang-nguyen \
+  --production-mode production-live \
+  --learning-file ./fixtures/trang-nguyen-learning-v1.json \
+  --games 20
+```
+
+Every tournament alternates the research AI between P0 and P1.
+
+## Current top production profiles
+
+| ID | Name | Base depth | P1 bonus | Nodes | Time | Extra |
+|---|---|---:|---:|---:|---:|---|
+| `tham-hoa` | Thám Hoa | 6 | +3 | 36,000 | 600 ms | opening book, TT, ordering, P1 branching +2 |
+| `bang-nhan` | Bảng Nhãn | 8 | +3 | 55,000 | 900 ms | opening book, TT, ordering, endgame +2 |
+| `trang-nguyen` | Trạng Nguyên | 11 | +5 | 100,000 | 1,200 ms | best-first root search, endgame +4, optional learning |
 
 ## CLI
 
@@ -45,7 +110,7 @@ npm run cli -- pie --level trang-nguyen --depth 6
 npm run cli -- perft --depth 1
 ```
 
-Search overrides are available via `--algorithm minimax|alpha-beta`, `--depth`, `--nodes`, and `--time`.
+The generic CLI/search layer remains an independent research implementation. For claims about the strength of the game’s top bots, use the **server-production benchmark** rather than the generic lab profile alone.
 
 ### Pie Rule semantics used by the lab
 
@@ -55,47 +120,42 @@ For each first move `X` made by opener A:
 - **SWAP**: identities swap seats; the board does not rotate. A becomes P1 and, because the engine state is already on P1's turn after the opening, A moves next.
 - `guaranteed = min(KEEP, SWAP)` from the original opener's perspective.
 
-The opener is assumed to choose the move maximizing this worst-case value. This directly tests whether search can find an opening that stays favorable even when the opponent gets the swap option.
-
-## Seven AI levels
-
-| ID | Name | Base depth | P1 depth bonus | Node budget | Time budget |
-|---|---|---:|---:|---:|---:|
-| `thu-sinh` | Thư sinh | 0 | 0 | 300 | 20 ms |
-| `tu-tai` | Tú Tài | 0 | 0 | 600 | 30 ms |
-| `cu-nhan` | Cử nhân | 0 | 0 | 1,200 | 40 ms |
-| `tien-si` | Tiến sĩ | 4 | 1 | 20,000 | 120 ms |
-| `tham-hoa` | Thám hoa | 6 | 2 | 24,000 | 450 ms |
-| `bang-nhan` | Bảng nhãn | 7 | 2 | 28,000 | 650 ms |
-| `trang-nguyen` | Trạng nguyên | 11 | 5 | 100,000 | 1,000 ms |
+The opener is assumed to choose the move maximizing this worst-case value.
 
 ## Project layout
 
 ```text
 src/
-  engine.ts       deterministic classic 2P rules + legal moves + state hash
-  types.ts        standalone domain types
-  profiles.ts     seven AI profiles
-  search.ts       minimax / alpha-beta + heuristic evaluation
-  analysis.ts     self-play, tournament, opening, Pie Rule, perft
-  cli.ts          research CLI
-  index.ts        public exports
+  engine.ts
+  search.ts
+  analysis.ts
+  cli.ts
+  research/
+    mcts.ts
+  reference/
+    production-ai.ts
+    server-production-ai.ts
+    trang-nguyen-best-first-search.ts
+    trang-nguyen-learning.ts
+  benchmarks/
+    research-vs-server-production.ts
 tests/
   engine.test.ts
   ai.test.ts
+  research-mcts.test.ts
+  server-production-parity.test.ts
 results/
   .gitkeep
 ```
 
-## Recommended next experiments
+## Research rules
 
-1. Production parity corpus: export 100-1,000 representative states and expected rankings.
-2. Full-width minimax vs alpha-beta benchmark: nodes, cutoffs and NPS.
-3. Transposition-table exact/lower/upper bounds and cached best-move ordering.
-4. Opening entropy over first 2/4/6 plies.
-5. Deeper seat-aware Pie Rule solving.
-6. MCTS behind the same search interface.
-7. Endgame tablebases for exact validation.
+1. Pin every production reference to a source commit.
+2. Pass parity tests before interpreting tournament results.
+3. Alternate P0/P1 evenly.
+4. Give compared algorithms explicit, reported time/node budgets.
+5. Report unresolved games instead of silently scoring them as draws.
+6. Never label a Trạng Nguyên comparison “full live strength” without the deployed learning snapshot when learning is enabled.
 
 ## License
 

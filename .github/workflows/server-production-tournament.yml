@@ -1,0 +1,42 @@
+name: server-production-tournament
+
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: "Even number of games per matchup"
+        required: false
+        default: "6"
+
+# Canonical tournament for claims about the production 2P bots. Kept manual
+# because a 12-job matrix at production time budgets is intentionally expensive.
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [uct, uct-pb]
+        opponent: [tham-hoa, bang-nhan, trang-nguyen]
+        production_mode: [production-live, production-max]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/server-production-parity.test.ts
+      - name: Run seat-balanced server production tournament
+        run: |
+          mkdir -p results
+          npm run benchmark:server -- \
+            --variant ${{ matrix.variant }} \
+            --opponent ${{ matrix.opponent }} \
+            --production-mode ${{ matrix.production_mode }} \
+            --games ${{ inputs.games || '6' }} \
+            --out results/${{ matrix.variant }}-vs-${{ matrix.opponent }}-${{ matrix.production_mode }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant }}-vs-${{ matrix.opponent }}-${{ matrix.production_mode }}
+          path: results/${{ matrix.variant }}-vs-${{ matrix.opponent }}-${{ matrix.production_mode }}.json
