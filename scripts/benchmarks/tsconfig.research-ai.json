@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "types": ["node"]
+  },
+  "include": [
+    "research-ai-tournament.ts",
+    "../../apps/web/src/game/ai-player.ts",
+    "../../packages/game-engine/src/**/*.ts"
+  ]
+}
