@@ -1,17 +1,7 @@
 name: bang-nhan-diagnosis
 
 on:
-  push:
-    branches:
-      - research/bang-nhan-root-cause
-    paths:
-      - ".github/workflows/bang-nhan-diagnosis.yml"
-      - "src/benchmarks/diagnose-bang-nhan.ts"
-      - "src/benchmarks/bang-nhan-ordering-causal.ts"
-      - "src/reference/**"
-      - "src/research/**"
-      - "tests/bang-nhan-*.test.ts"
-      - "src/engine.ts"
+  workflow_dispatch:
 
 jobs:
   parity:
