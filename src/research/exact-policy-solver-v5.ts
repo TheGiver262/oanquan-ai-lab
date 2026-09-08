@@ -62,6 +62,7 @@ type NodeResult = SolvedNode | UnresolvedNode;
 
 type Context = {
   rootPlayer: PlayerId;
+  rootHistoryPlies: number;
   policy: RepetitionPolicy;
   nodeBudget: number;
   deadline: number;
@@ -201,6 +202,7 @@ export function solveExactPolicyState(
   const rootKey = exactStrategicStateKey(game);
   const context: Context = {
     rootPlayer: game.currentPlayer,
+    rootHistoryPlies: rootState.plies,
     policy,
     nodeBudget,
     deadline: performance.now() + timeBudgetMs,
@@ -366,7 +368,7 @@ function enterChild(
     restoreHistoryKey = key;
     restoreHistoryCount = previous;
   } else if (context.policy.kind === "max-ply") {
-    const absolutePlies = parent.depth + 1 + contextRootHistoryPlies(context);
+    const absolutePlies = context.rootHistoryPlies + depth;
     if (absolutePlies >= context.policy.maxPlies) {
       context.policyDrawLeaves += 1;
       return { kind: "immediate", result: { solved: true, value: 0, bestMove: null, pv: [] } };
@@ -434,14 +436,6 @@ function cleanupStack(stack: SearchFrame[], context: Context): void {
 function restoreHistory(context: Context, key: string, previous: number): void {
   if (previous === 0) context.historyCounts.delete(key);
   else context.historyCounts.set(key, previous);
-}
-
-function contextRootHistoryPlies(context: Context): number {
-  // `historyCounts` itself cannot reveal the number of prior plies. Max-ply is
-  // only a fallback experiment and is not part of the current repeat2/repeat3
-  // matrix, so V5 keeps its root offset at zero here. A future composite-policy
-  // solver should carry root plies explicitly.
-  return 0;
 }
 
 function orderMoves(game: GameState, legal: PlayerMove[]): PlayerMove[] {
