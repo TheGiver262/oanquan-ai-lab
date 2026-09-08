@@ -34,9 +34,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        oracle_mode: [policy, canonical-acyclic]
         max_board_value: [8, 12, 16]
         oracle_nodes: [5000, 50000]
-    name: coverage (board=${{ matrix.max_board_value }}, nodes=${{ matrix.oracle_nodes }})
+    name: coverage (${{ matrix.oracle_mode }}, board=${{ matrix.max_board_value }}, nodes=${{ matrix.oracle_nodes }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,14 +48,16 @@ jobs:
         shell: bash
         run: |
           mkdir -p results/v6
+          MODE="${{ matrix.oracle_mode }}"
           npm run benchmark:v6:oracle-coverage -- \
             --policy repeat3 \
+            --oracle-mode "$MODE" \
             --max-board-value "${{ matrix.max_board_value }}" \
             --oracle-nodes "${{ matrix.oracle_nodes }}" \
             --oracle-ms 100 \
             --max-probes-per-line 12 \
-            | tee "results/v6/coverage-b${{ matrix.max_board_value }}-n${{ matrix.oracle_nodes }}.json"
+            | tee "results/v6/coverage-${MODE}-b${{ matrix.max_board_value }}-n${{ matrix.oracle_nodes }}.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: v6-coverage-b${{ matrix.max_board_value }}-n${{ matrix.oracle_nodes }}
+          name: v6-coverage-${{ matrix.oracle_mode }}-b${{ matrix.max_board_value }}-n${{ matrix.oracle_nodes }}
           path: results/v6/*.json
