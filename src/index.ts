@@ -6,3 +6,6 @@ export * from "./analysis.js";
 export * from "./research/exact-endgame-v4.js";
 export * from "./research/endgame-graph-v4.js";
 export * from "./research/v3-pv-corpus.js";
+export * from "./research/repetition-policy-v5.js";
+export * from "./research/exact-policy-solver-v5.js";
+export * from "./research/pv-policy-replay-v5.js";
