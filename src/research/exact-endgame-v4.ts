@@ -150,11 +150,12 @@ export function solveExactEndgame(
     };
   }
 
+  const value = normalizeZero(node.value);
   return {
     status: "solved",
     solved: true,
-    value: node.value,
-    outcome: node.value > 0 ? "win" : node.value < 0 ? "loss" : "draw",
+    value,
+    outcome: value > 0 ? "win" : value < 0 ? "loss" : "draw",
     bestMove: node.bestMove,
     principalVariation: node.pv,
     diagnostics,
@@ -171,7 +172,7 @@ function solveNode(
   context.maxDepth = Math.max(context.maxDepth, depth);
 
   if (state.status === "finished") {
-    const value = finalMargin(state, playerToMove);
+    const value = normalizeZero(finalMargin(state, playerToMove));
     return { solved: true, value, bestMove: null, pv: [] };
   }
 
@@ -210,7 +211,7 @@ function solveNode(
       const child = solveNode(applied.state, otherPlayer(playerToMove), depth + 1, context);
       if (!child.solved) return child;
 
-      const candidateValue = -child.value;
+      const candidateValue = normalizeZero(-child.value);
       if (
         candidateValue > bestValue
         || (candidateValue === bestValue && compareMove(move, bestMove) < 0)
@@ -227,7 +228,7 @@ function solveNode(
 
     const solved: SolvedNode = {
       solved: true,
-      value: bestValue,
+      value: normalizeZero(bestValue),
       bestMove,
       pv: [bestMove, ...bestChildPv],
     };
@@ -292,6 +293,10 @@ export function totalGameValue(state: GameState): number {
 function finalMargin(state: GameState, perspective: PlayerId): number {
   const opponent = otherPlayer(perspective);
   return state.scores[perspective] - state.scores[opponent];
+}
+
+function normalizeZero(value: number): number {
+  return value === 0 ? 0 : value;
 }
 
 function consumeNode(context: ExactContext): void {
