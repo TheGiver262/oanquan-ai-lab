@@ -21,7 +21,8 @@
     "benchmark:openings:v3:selfplay": "tsx src/benchmarks/opening-balance-v3-selfplay.ts",
     "benchmark:openings:v4:exact": "tsx src/benchmarks/opening-balance-v4-exact.ts",
     "benchmark:openings:v4:graph": "tsx src/benchmarks/opening-balance-v4-graph.ts",
-    "benchmark:openings:v5:policy-exact": "tsx src/benchmarks/opening-balance-v5-policy-exact.ts"
+    "benchmark:openings:v5:policy-exact": "tsx src/benchmarks/opening-balance-v5-policy-exact.ts",
+    "benchmark:openings:v5:selfplay-observer": "tsx src/benchmarks/opening-balance-v5-selfplay-observer.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
