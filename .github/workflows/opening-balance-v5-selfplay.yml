@@ -1,0 +1,57 @@
+name: opening-balance-v5-selfplay
+
+on:
+  push:
+    branches:
+      - research/repetition-policy-v5
+    paths:
+      - "src/benchmarks/opening-balance-v5-selfplay-observer.ts"
+      - ".github/workflows/opening-balance-v5-selfplay.yml"
+  workflow_dispatch:
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: [B3-CW, B3-CCW]
+        pair:
+          - pvs-strategic__trang-nguyen
+          - uct-pb__trang-nguyen
+          - pvs-strategic__uct-pb
+    name: observe (${{ matrix.opening }}, ${{ matrix.pair }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Observe natural repetition without adjudication
+        shell: bash
+        run: |
+          mkdir -p results/v5-selfplay
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          PAIR="${{ matrix.pair }}"
+          A="${PAIR%%__*}"
+          B="${PAIR##*__}"
+          npm run benchmark:openings:v5:selfplay-observer -- \
+            --opening "$OPENING" \
+            --a "$A" \
+            --b "$B" \
+            --games 4 \
+            --pvs-nodes 30000 \
+            --pvs-depth 12 \
+            --pvs-ms 300 \
+            --simulations 4000 \
+            --mcts-ms 300 \
+            --production-nodes 30000 \
+            --production-ms 300 \
+            --max-moves 240 \
+            | tee "results/v5-selfplay/${{ matrix.opening }}-${{ matrix.pair }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v5-selfplay-${{ matrix.opening }}-${{ matrix.pair }}
+          path: results/v5-selfplay/*.json
