@@ -28,7 +28,9 @@
     "benchmark:v6:wdl-graph": "tsx src/benchmarks/wdl-graph-v6-coverage.ts",
     "benchmark:v6:wdl-ab": "tsx src/benchmarks/hybrid-wdl-v6-ab.ts",
     "benchmark:v6:tablebase-holdout": "tsx src/benchmarks/tablebase-v6-holdout.ts",
-    "benchmark:v6:tablebase-selfplay": "tsx src/benchmarks/tablebase-v6-selfplay-generalization.ts"
+    "benchmark:v6:tablebase-selfplay": "tsx src/benchmarks/tablebase-v6-selfplay-generalization.ts",
+    "benchmark:v7:strength": "tsx src/benchmarks/v7-algorithm-strength.ts",
+    "benchmark:v7:mode": "tsx src/benchmarks/v7-mode-cross-engine.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
