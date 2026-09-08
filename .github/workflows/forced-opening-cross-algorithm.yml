@@ -1,0 +1,45 @@
+name: forced-opening-cross-algorithm
+on:
+  push:
+    branches:
+      - research/opening-pie-balance
+  workflow_dispatch:
+
+jobs:
+  opening:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CW
+          - B1:CCW
+          - B2:CW
+          - B2:CCW
+          - B3:CW
+          - B3:CCW
+          - B4:CW
+          - B4:CCW
+          - B5:CW
+          - B5:CCW
+    name: cross (${{ matrix.opening }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run forced-opening seat swap
+        run: >-
+          npx tsx src/benchmarks/forced-opening-cross-algorithm.ts
+          --opening "${{ matrix.opening }}"
+          --games 6
+          --variant uct-pb
+          --simulations 100000
+          --rollout-depth 20
+          --mcts-ms 1200
+          --production-ms 1200
+          --production-nodes 100000
+          --max-moves 160
+          --seed 20260908
