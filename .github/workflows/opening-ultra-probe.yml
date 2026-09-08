@@ -1,8 +1,5 @@
 name: opening-ultra-probe
 on:
-  push:
-    branches:
-      - research/opening-pie-balance
   workflow_dispatch:
 
 jobs:
