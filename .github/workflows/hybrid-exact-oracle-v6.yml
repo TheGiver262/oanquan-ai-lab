@@ -1,0 +1,60 @@
+name: hybrid-exact-oracle-v6
+
+on:
+  push:
+    branches:
+      - research/hybrid-exact-oracle-v6
+    paths:
+      - "src/research/hybrid-exact-oracle-v6.ts"
+      - "src/research/exact-policy-solver-v5.ts"
+      - "src/research/repetition-policy-v5.ts"
+      - "src/research/v3-pv-corpus.ts"
+      - "src/benchmarks/hybrid-oracle-v6-coverage.ts"
+      - "tests/hybrid-exact-oracle-v6.test.ts"
+      - ".github/workflows/hybrid-exact-oracle-v6.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts
+      - run: npm run build
+
+  coverage:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        max_board_value: [8, 12, 16]
+        oracle_nodes: [5000, 50000]
+    name: coverage (board=${{ matrix.max_board_value }}, nodes=${{ matrix.oracle_nodes }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Probe threefold exact-oracle coverage
+        shell: bash
+        run: |
+          mkdir -p results/v6
+          npm run benchmark:v6:oracle-coverage -- \
+            --policy repeat3 \
+            --max-board-value "${{ matrix.max_board_value }}" \
+            --oracle-nodes "${{ matrix.oracle_nodes }}" \
+            --oracle-ms 100 \
+            --max-probes-per-line 12 \
+            | tee "results/v6/coverage-b${{ matrix.max_board_value }}-n${{ matrix.oracle_nodes }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-coverage-b${{ matrix.max_board_value }}-n${{ matrix.oracle_nodes }}
+          path: results/v6/*.json
