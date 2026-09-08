@@ -1,0 +1,70 @@
+name: v8-competitive-protocols
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/hybrid-exact-oracle-v6
+    paths:
+      - ".github/workflows/v8-competitive-protocols.yml"
+      - "src/benchmarks/v8-competitive-protocols.ts"
+      - "src/research/competitive-protocol-v8.ts"
+      - "tests/competitive-protocol-v8.test.ts"
+      - "package.json"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/competitive-protocol-v8.test.ts tests/policy-mcts-v7.test.ts tests/repetition-policy-v5.test.ts
+      - run: npm run build
+
+  protocol:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        protocol:
+          - single-b2ccw
+          - balanced-pool
+          - pie
+          - swap2-adapted
+        seed:
+          - 20260908
+          - 20260909
+    name: ${{ matrix.protocol }}-${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run V8 strong-AI protocol tournament
+        shell: bash
+        run: |
+          mkdir -p results/v8-protocols
+          npm run benchmark:v8:protocol -- \
+            --protocol "${{ matrix.protocol }}" \
+            --games 16 \
+            --ms 350 \
+            --simulations 100000 \
+            --rollout-depth 20 \
+            --meta-ms 45 \
+            --meta-simulations 20000 \
+            --swap2-candidates 12 \
+            --max-moves 240 \
+            --seed "${{ matrix.seed }}" \
+            | tee "results/v8-protocols/${{ matrix.protocol }}-${{ matrix.seed }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v8-${{ matrix.protocol }}-${{ matrix.seed }}
+          path: results/v8-protocols/*.json
