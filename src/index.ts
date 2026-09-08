@@ -12,3 +12,4 @@ export * from "./research/pv-policy-replay-v5.js";
 export * from "./research/policy-aware-pvs-v5.js";
 export * from "./research/hybrid-exact-oracle-v6.js";
 export * from "./research/wdl-graph-proof-v6.js";
+export * from "./research/hybrid-wdl-oracle-v6.js";
