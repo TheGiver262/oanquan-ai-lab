@@ -32,6 +32,7 @@ export type ExactPolicyDiagnostics = {
   cycleEdges: number;
   maxDepth: number;
   rootBoardValue: number;
+  rootHistoryPlies: number;
   budgetReason: "node" | "time" | null;
 };
 
@@ -83,20 +84,27 @@ class BudgetExhausted extends Error {
   }
 }
 
-/**
- * Exact reduced-state solver under an explicit research adjudication policy.
- *
- * Unlike V4's policy-free solver, a repeat-draw or max-ply policy can make a
- * loopy canonical game finite because the adjudication context is included in
- * the search state. `none` preserves V4 semantics and reports unresolved when
- * the same policy state is reached recursively.
- */
+/** Exact solve starting from a canonical game with fresh repetition history. */
 export function solveExactWithPolicy(
   game: GameState,
   policy: RepetitionPolicy,
   options: ExactPolicySolverOptions = {},
 ): ExactPolicyResult {
+  return solveExactPolicyState(createPolicyState(game), policy, options);
+}
+
+/**
+ * Exact reduced-state solver starting from an already accumulated policy path.
+ * This is required for V3-PV experiments: repetition counts before the selected
+ * deep state materially affect whether later returns are adjudicated.
+ */
+export function solveExactPolicyState(
+  rootState: PolicyState,
+  policy: RepetitionPolicy,
+  options: ExactPolicySolverOptions = {},
+): ExactPolicyResult {
   validatePolicy(policy);
+  const game = rootState.game;
   const maxRootBoardValue = options.maxRootBoardValue ?? 18;
   const nodeBudget = options.nodeBudget ?? 2_000_000;
   const timeBudgetMs = options.timeBudgetMs ?? 10_000;
@@ -111,10 +119,11 @@ export function solveExactWithPolicy(
     cycleEdges: 0,
     maxDepth: 0,
     rootBoardValue,
+    rootHistoryPlies: rootState.plies,
     budgetReason: null,
   });
 
-  if (game.status !== "finished" && rootBoardValue > maxRootBoardValue) {
+  if (game.status !== "finished" && rootState.adjudication === null && rootBoardValue > maxRootBoardValue) {
     return {
       status: "outside-material-limit",
       solved: false,
@@ -127,7 +136,6 @@ export function solveExactWithPolicy(
     };
   }
 
-  const rootState = createPolicyState(game);
   const context: Context = {
     rootPlayer: game.currentPlayer,
     policy,
@@ -162,6 +170,7 @@ export function solveExactWithPolicy(
     cycleEdges: context.cycleEdges,
     maxDepth: context.maxDepth,
     rootBoardValue,
+    rootHistoryPlies: rootState.plies,
     budgetReason: context.budgetReason,
   };
 
