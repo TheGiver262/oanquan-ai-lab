@@ -1,0 +1,62 @@
+name: opening-balance-v5
+
+on:
+  push:
+    branches:
+      - research/repetition-policy-v5
+    paths:
+      - "src/research/repetition-policy-v5.ts"
+      - "src/research/exact-policy-solver-v5.ts"
+      - "src/research/pv-policy-replay-v5.ts"
+      - "src/benchmarks/opening-balance-v5-policy-exact.ts"
+      - ".github/workflows/opening-balance-v5.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/exact-endgame-v4.test.ts tests/endgame-graph-v4.test.ts tests/negamax-pvs-v3.test.ts
+      - run: npm run build
+
+  policy-exact:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: [B3-CW, B3-CCW]
+        family: [material, strategic]
+        policy: [repeat2, repeat3]
+    name: exact (${{ matrix.opening }}, ${{ matrix.family }}, ${{ matrix.policy }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run policy-aware exact probe
+        shell: bash
+        run: |
+          mkdir -p results/v5
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          npm run benchmark:openings:v5:policy-exact -- \
+            --opening "$OPENING" \
+            --family "${{ matrix.family }}" \
+            --policy "${{ matrix.policy }}" \
+            --max-board-value 30 \
+            --nodes 2000000 \
+            --time 60000 \
+            | tee "results/v5/${{ matrix.opening }}-${{ matrix.family }}-${{ matrix.policy }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v5-${{ matrix.opening }}-${{ matrix.family }}-${{ matrix.policy }}
+          path: results/v5/*.json
