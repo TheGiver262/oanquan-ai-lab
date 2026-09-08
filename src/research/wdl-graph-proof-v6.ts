@@ -1,4 +1,5 @@
-import type { GameState, PlayerMove } from "../types.js";
+import { otherPlayer } from "../engine.js";
+import type { GameState, PlayerId, PlayerMove } from "../types.js";
 import {
   analyzeReachableEndgameGraph,
   type BuiltEndgameGraph,
@@ -84,7 +85,7 @@ export function proveWdlByGraphV6(
   }
 
   if (root.game.status === "finished") {
-    const outcome = terminalOutcome(root.game);
+    const outcome = terminalOutcomeForPerspectiveV6(root.game, root.game.currentPlayer);
     return {
       solved: true,
       outcome,
@@ -106,7 +107,7 @@ export function proveWdlByGraphV6(
     nodeBudget: options.nodeBudget ?? 50_000,
     timeBudgetMs: options.timeBudgetMs ?? 100,
   });
-  return solveBuiltGraph(built, policy);
+  return solveBuiltGraph(built, policy, root.game.currentPlayer);
 }
 
 /**
@@ -126,16 +127,33 @@ export function isGraphWdlHistorySafe(state: PolicyState, policy: RepetitionPoli
   return true;
 }
 
+/**
+ * Terminal WDL from an explicit perspective. Do not infer perspective from a
+ * terminal GameState.currentPlayer: the canonical engine preserves different
+ * currentPlayer semantics for different finish paths (e.g. both-quan-empty vs
+ * no-refill). Graph search therefore derives perspective from root ply parity.
+ */
+export function terminalOutcomeForPerspectiveV6(
+  state: GameState,
+  perspective: PlayerId,
+): Exclude<Wdl, "unknown"> {
+  if (state.winner === null) return "draw";
+  return state.winner === perspective ? "win" : "loss";
+}
+
 function solveBuiltGraph(
   built: BuiltEndgameGraph,
   policy: RepetitionPolicy,
+  rootPlayer: PlayerId,
 ): GraphWdlProofResult {
   const nodes = built.nodes;
   const outcomes = new Array<Wdl>(nodes.length).fill("unknown");
   const proofMoves = new Array<PlayerMove | null>(nodes.length).fill(null);
 
   for (const node of nodes) {
-    if (node.terminal) outcomes[node.id] = terminalOutcome(node.state);
+    if (!node.terminal) continue;
+    const perspective = playerAtDepth(rootPlayer, node.depth);
+    outcomes[node.id] = terminalOutcomeForPerspectiveV6(node.state, perspective);
   }
 
   let passes = 0;
@@ -227,12 +245,8 @@ function solveBuiltGraph(
   };
 }
 
-function terminalOutcome(state: GameState): Exclude<Wdl, "unknown"> {
-  if (state.winner === null) return "draw";
-  // The canonical engine leaves currentPlayer as the player who made the final
-  // move when that move ends the game, so winner-vs-currentPlayer is the correct
-  // terminal outcome from this graph node's player-to-move perspective.
-  return state.winner === state.currentPlayer ? "win" : "loss";
+function playerAtDepth(rootPlayer: PlayerId, depth: number): PlayerId {
+  return depth % 2 === 0 ? rootPlayer : otherPlayer(rootPlayer);
 }
 
 function countOutcomes(outcomes: readonly Wdl[]): Record<Wdl, number> {
