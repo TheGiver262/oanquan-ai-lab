@@ -8,6 +8,8 @@ on:
       - "src/research/hybrid-exact-oracle-v6.ts"
       - "src/research/hybrid-wdl-oracle-v6.ts"
       - "src/research/wdl-graph-proof-v6.ts"
+      - "src/research/wdl-tablebase-v6.ts"
+      - "src/research/tablebase-pvs-v6.ts"
       - "src/research/endgame-graph-v4.ts"
       - "src/research/exact-policy-solver-v5.ts"
       - "src/research/repetition-policy-v5.ts"
@@ -15,9 +17,12 @@ on:
       - "src/benchmarks/hybrid-oracle-v6-coverage.ts"
       - "src/benchmarks/wdl-graph-v6-coverage.ts"
       - "src/benchmarks/hybrid-wdl-v6-ab.ts"
+      - "src/benchmarks/tablebase-v6-holdout.ts"
       - "tests/hybrid-exact-oracle-v6.test.ts"
       - "tests/hybrid-wdl-oracle-v6.test.ts"
       - "tests/wdl-graph-proof-v6.test.ts"
+      - "tests/tablebase-pvs-v6.test.ts"
+      - "src/index.ts"
       - "package.json"
       - ".github/workflows/hybrid-exact-oracle-v6.yml"
   workflow_dispatch:
@@ -32,11 +37,49 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
-      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/hybrid-wdl-oracle-v6.test.ts tests/wdl-graph-proof-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/endgame-graph-v4.test.ts
+      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/hybrid-wdl-oracle-v6.test.ts tests/wdl-graph-proof-v6.test.ts tests/tablebase-pvs-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/endgame-graph-v4.test.ts
       - run: npm run build
+
+  tablebase-holdout:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        train_opening: [B3-CW, B3-CCW]
+        placement: [leaf, all-low]
+    name: tablebase-holdout (train=${{ matrix.train_opening }}, placement=${{ matrix.placement }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Build offline WDL tablebase and test opposite opening
+        shell: bash
+        run: |
+          mkdir -p results/v6-tablebase
+          OPENING="${{ matrix.train_opening }}"
+          OPENING="${OPENING/-/:}"
+          npm run benchmark:v6:tablebase-holdout -- \
+            --train-opening "$OPENING" \
+            --max-board-value 12 \
+            --graph-nodes 5000 \
+            --graph-ms 100 \
+            --search-nodes 30000 \
+            --search-ms 300 \
+            --max-depth 12 \
+            --placement "${{ matrix.placement }}" \
+            | tee "results/v6-tablebase/holdout-${{ matrix.train_opening }}-${{ matrix.placement }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-tablebase-${{ matrix.train_opening }}-${{ matrix.placement }}
+          path: results/v6-tablebase/*.json
 
   wdl-ab:
     needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
