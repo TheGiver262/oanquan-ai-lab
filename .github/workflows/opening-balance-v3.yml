@@ -1,9 +1,6 @@
 name: opening-balance-v3
 
 on:
-  push:
-    branches:
-      - research/opening-balance-v3
   workflow_dispatch:
 
 jobs:
