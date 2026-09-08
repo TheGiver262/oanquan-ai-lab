@@ -3,7 +3,6 @@ import type { PlayerId, PlayerMove } from "../types.js";
 import { exactStrategicStateKey } from "./exact-endgame-v4.js";
 import {
   analyzeReachableEndgameGraph,
-  type EndgameGraphNode,
 } from "./endgame-graph-v4.js";
 import {
   isGraphWdlHistorySafe,
@@ -142,12 +141,12 @@ export function buildWdlTablebaseEntriesV6(
 
   const entries: WdlTablebaseEntryV6[] = [];
   for (const node of nodes) {
-    const outcome = outcomes[node.id];
+    const outcome = outcomes[node.id] ?? "unknown";
     if (outcome === "unknown") continue;
     entries.push({
       key: exactStrategicStateKey(node.state),
       outcome,
-      proofMove: proofMoves[node.id],
+      proofMove: proofMoves[node.id] ?? null,
     });
   }
 
