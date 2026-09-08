@@ -15,3 +15,4 @@ export * from "./research/wdl-graph-proof-v6.js";
 export * from "./research/hybrid-wdl-oracle-v6.js";
 export * from "./research/wdl-tablebase-v6.js";
 export * from "./research/tablebase-pvs-v6.js";
+export * from "./research/policy-mcts-v7.js";
