@@ -1,9 +1,6 @@
 name: opening-balance-v4
 
 on:
-  push:
-    branches:
-      - research/exact-endgame-v4
   workflow_dispatch:
 
 jobs:
@@ -20,7 +17,6 @@ jobs:
       - run: npm run build
 
   exact-probe:
-    if: github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 12
