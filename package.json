@@ -1,6 +1,6 @@
 {
   "name": "oanquan-ai-lab",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": false,
   "type": "module",
   "description": "Standalone Ô Ăn Quan AI research lab: production-reference search, MCTS, independent PVS search, self-play, opening analysis and Pie Rule experiments.",
@@ -16,7 +16,9 @@
     "cli": "tsx src/cli.ts",
     "benchmark:research": "tsx src/benchmarks/research-vs-production.ts",
     "benchmark:server": "tsx src/benchmarks/research-vs-server-production.ts",
-    "benchmark:openings:v2": "tsx src/benchmarks/opening-balance-v2.ts"
+    "benchmark:openings:v2": "tsx src/benchmarks/opening-balance-v2.ts",
+    "benchmark:openings:v3:deep": "tsx src/benchmarks/opening-balance-v3-deep.ts",
+    "benchmark:openings:v3:selfplay": "tsx src/benchmarks/opening-balance-v3-selfplay.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
