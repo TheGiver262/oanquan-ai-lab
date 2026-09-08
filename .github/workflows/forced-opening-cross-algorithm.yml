@@ -1,8 +1,5 @@
 name: forced-opening-cross-algorithm
 on:
-  push:
-    branches:
-      - research/opening-pie-balance
   workflow_dispatch:
 
 jobs:
