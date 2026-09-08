@@ -1,4 +1,4 @@
-import { getLegalMoves } from "../engine.js";
+import { createInitialState, getLegalMoves } from "../engine.js";
 import { boardValue, exactStrategicStateKey } from "../research/exact-endgame-v4.js";
 import { searchPolicyAwarePvsV5 } from "../research/policy-aware-pvs-v5.js";
 import {
@@ -234,7 +234,7 @@ function replayLine(
   openingKey: "B3:CW" | "B3:CCW",
   pv: readonly string[],
 ): Snapshot[] {
-  let state = createPolicyState((awaitInitialState)());
+  let state = createPolicyState(createInitialState());
   const snapshots: Snapshot[] = [];
   const keys = [openingKey, ...pv];
   for (let index = 0; index < keys.length; index += 1) {
@@ -253,20 +253,6 @@ function replayLine(
   }
   return snapshots;
 }
-
-// Kept as a function to make it impossible for one replay to mutate another.
-function awaitInitialState() {
-  // Dynamic-looking wrapper, synchronous by design.
-  const { createInitialState } = requireEngineInitial();
-  return createInitialState();
-}
-
-function requireEngineInitial(): { createInitialState: typeof import("../engine.js")["createInitialState"] } {
-  // This helper is replaced below by the statically imported implementation at build time.
-  return { createInitialState: createInitialStateStatic };
-}
-
-import { createInitialState as createInitialStateStatic } from "../engine.js";
 
 function findMove(state: PolicyState, key: string): PlayerMove {
   const [pit, dir] = key.split(":") as [PlayerMove["pit"], Direction];
