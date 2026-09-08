@@ -3,7 +3,7 @@
   "version": "0.6.0",
   "private": false,
   "type": "module",
-  "description": "Standalone Ô Ăn Quan AI research lab: production-reference search, MCTS, independent PVS search, exact endgame solving, self-play, opening analysis and balance experiments.",
+  "description": "Standalone Ô Ăn Quan AI research lab: production-reference search, MCTS, independent PVS search, exact and SCC-aware endgame analysis, self-play, opening analysis and balance experiments.",
   "license": "MIT",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -19,7 +19,8 @@
     "benchmark:openings:v2": "tsx src/benchmarks/opening-balance-v2.ts",
     "benchmark:openings:v3:deep": "tsx src/benchmarks/opening-balance-v3-deep.ts",
     "benchmark:openings:v3:selfplay": "tsx src/benchmarks/opening-balance-v3-selfplay.ts",
-    "benchmark:openings:v4:exact": "tsx src/benchmarks/opening-balance-v4-exact.ts"
+    "benchmark:openings:v4:exact": "tsx src/benchmarks/opening-balance-v4-exact.ts",
+    "benchmark:openings:v4:graph": "tsx src/benchmarks/opening-balance-v4-graph.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
