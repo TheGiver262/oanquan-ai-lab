@@ -1,0 +1,54 @@
+{
+  "phase": "Opening Balance V3",
+  "repository": "TheGiver262/oanquan-ai-lab",
+  "productionRepositoryModified": false,
+  "workflowRunId": 34185314775,
+  "benchmarkHead": "28bc01c33a9b61c35f904b016fee295ccaeda954",
+  "productionReferenceCommit": "4984701ce151ee270a6a5ba5fc9211a6ec2b6996",
+  "validation": {
+    "typecheck": "success",
+    "pvsRegression": "success",
+    "build": "success",
+    "heavyJobs": "24/24 success"
+  },
+  "deep": {
+    "B3:CW": {
+      "material": [
+        {"nodes": 10000000, "score": -60, "depth": 17, "bestReply": "T1:CW"},
+        {"nodes": 25000000, "score": 0, "depth": 18, "bestReply": "T1:CW"},
+        {"nodes": 50000000, "score": -30, "depth": 19, "bestReply": "T1:CW"}
+      ],
+      "strategic": [
+        {"nodes": 10000000, "score": -64, "depth": 17, "bestReply": "T1:CW"},
+        {"nodes": 25000000, "score": 4, "depth": 18, "bestReply": "T1:CW"},
+        {"nodes": 50000000, "score": -30, "depth": 20, "bestReply": "T1:CW"}
+      ],
+      "rootReplyStableAcrossAllMeasurements": true
+    },
+    "B3:CCW": {
+      "material": [
+        {"nodes": 10000000, "score": -10, "depth": 16, "bestReply": "T4:CCW"},
+        {"nodes": 25000000, "score": 0, "depth": 18, "bestReply": "T1:CCW"},
+        {"nodes": 50000000, "score": -30, "depth": 20, "bestReply": "T1:CW"}
+      ],
+      "strategic": [
+        {"nodes": 10000000, "score": -2, "depth": 16, "bestReply": "T4:CCW"},
+        {"nodes": 25000000, "score": 4, "depth": 18, "bestReply": "T4:CCW"},
+        {"nodes": 50000000, "score": -30, "depth": 20, "bestReply": "T4:CCW"}
+      ],
+      "rootReplyStableAcrossAllMeasurements": false
+    }
+  },
+  "selfplay": {
+    "gamesPerOpening": 24,
+    "B3:CW": {"p0Wins": 11, "p1Wins": 10, "draws": 3, "unresolved": 0},
+    "B3:CCW": {"p0Wins": 11, "p1Wins": 13, "draws": 0, "unresolved": 0},
+    "claimLimit": "small paired cross-engine stress test; engine-strength confound remains"
+  },
+  "ranking": [
+    {"opening": "B3:CW", "status": "strongest current candidate neutral opening; unproven"},
+    {"opening": "B3:CCW", "status": "secondary candidate; lower root-reply convergence confidence"}
+  ],
+  "claimLimit": "bounded heuristic evidence only; neither opening is solved or proven balanced; do not ship a production Balanced Opening Pool from V3 alone",
+  "nextPhase": "proof-oriented exact/endgame solving seeded from deep B3 principal variations, with B3:CW -> T1:CW as the highest-priority response family"
+}
