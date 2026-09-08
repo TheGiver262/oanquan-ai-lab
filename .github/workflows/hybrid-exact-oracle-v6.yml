@@ -6,6 +6,7 @@ on:
       - research/hybrid-exact-oracle-v6
     paths:
       - "src/research/hybrid-exact-oracle-v6.ts"
+      - "src/research/hybrid-wdl-oracle-v6.ts"
       - "src/research/wdl-graph-proof-v6.ts"
       - "src/research/endgame-graph-v4.ts"
       - "src/research/exact-policy-solver-v5.ts"
@@ -13,8 +14,11 @@ on:
       - "src/research/v3-pv-corpus.ts"
       - "src/benchmarks/hybrid-oracle-v6-coverage.ts"
       - "src/benchmarks/wdl-graph-v6-coverage.ts"
+      - "src/benchmarks/hybrid-wdl-v6-ab.ts"
       - "tests/hybrid-exact-oracle-v6.test.ts"
+      - "tests/hybrid-wdl-oracle-v6.test.ts"
       - "tests/wdl-graph-proof-v6.test.ts"
+      - "package.json"
       - ".github/workflows/hybrid-exact-oracle-v6.yml"
   workflow_dispatch:
 
@@ -28,11 +32,48 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
-      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/wdl-graph-proof-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/endgame-graph-v4.test.ts
+      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/hybrid-wdl-oracle-v6.test.ts tests/wdl-graph-proof-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/endgame-graph-v4.test.ts
       - run: npm run build
+
+  wdl-ab:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        wdl_max_board_value: [8, 12]
+        placement: [leaf, all-low]
+    name: wdl-ab (board=${{ matrix.wdl_max_board_value }}, placement=${{ matrix.placement }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Compare baseline PVS and hybrid WDL at equal total budget
+        shell: bash
+        run: |
+          mkdir -p results/v6-ab
+          npm run benchmark:v6:wdl-ab -- \
+            --corpus-max-board-value 12 \
+            --wdl-max-board-value "${{ matrix.wdl_max_board_value }}" \
+            --placement "${{ matrix.placement }}" \
+            --search-nodes 30000 \
+            --search-ms 300 \
+            --max-depth 12 \
+            --wdl-graph-nodes 5000 \
+            --wdl-ms 50 \
+            --wdl-max-probes 4 \
+            | tee "results/v6-ab/ab-b${{ matrix.wdl_max_board_value }}-${{ matrix.placement }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-ab-b${{ matrix.wdl_max_board_value }}-${{ matrix.placement }}
+          path: results/v6-ab/*.json
 
   wdl-budget-sweep:
     needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
