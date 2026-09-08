@@ -37,7 +37,7 @@ describe("V6 tablebase PVS", () => {
     expect(candidate.diagnostics.tablebaseHits).toBe(0);
   });
 
-  it("returns an exact root WDL tablebase hit without search", () => {
+  it("returns an exact root WDL tablebase hit without search and above bounded terminal utility", () => {
     const root = createPolicyState(createInitialState());
     const proofMove = getLegalMoves(root.game)[0]!;
     const tablebase = createWdlTablebaseV6([[
@@ -59,6 +59,7 @@ describe("V6 tablebase PVS", () => {
     expect(result.scoreSource).toBe("tablebase");
     expect(result.exactWdl).toBe("win");
     expect(result.move).toEqual(proofMove);
+    expect(result.score).toBeGreaterThan(10_000_100);
     expect(result.diagnostics.nodeCount).toBe(0);
     expect(result.diagnostics.tablebaseLookups).toBe(1);
     expect(result.diagnostics.tablebaseHits).toBe(1);
