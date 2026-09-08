@@ -1,6 +1,6 @@
 {
   "name": "oanquan-ai-lab",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": false,
   "type": "module",
   "description": "Standalone Ô Ăn Quan AI research lab: production-reference search, MCTS, PVS, exact/SCC endgames, explicit repetition-policy experiments, self-play, opening analysis and balance research.",
@@ -31,7 +31,8 @@
     "benchmark:v6:tablebase-selfplay": "tsx src/benchmarks/tablebase-v6-selfplay-generalization.ts",
     "benchmark:v7:strength": "tsx src/benchmarks/v7-algorithm-strength.ts",
     "benchmark:v7:mode": "tsx src/benchmarks/v7-mode-cross-engine.ts",
-    "benchmark:v7:fairness": "tsx src/benchmarks/v7-mode-seat-fairness.ts"
+    "benchmark:v7:fairness": "tsx src/benchmarks/v7-mode-seat-fairness.ts",
+    "benchmark:v8:protocol": "tsx src/benchmarks/v8-competitive-protocols.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
