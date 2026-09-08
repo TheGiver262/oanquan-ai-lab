@@ -1,0 +1,28 @@
+{
+  "phase": "opening-balance-v2",
+  "scope": "research-only",
+  "productionRepositoryModified": false,
+  "solver": {
+    "name": "independent-negamax-pvs",
+    "search": ["iterative-deepening", "negamax", "alpha-beta", "pvs", "aspiration", "transposition-table"],
+    "evaluation": "independent material/refill heuristic",
+    "claimLimit": "bounded heuristic convergence probe, not an exact game-theoretic solver"
+  },
+  "sixOpeningPass": [
+    {"opening":"B1:CCW","scores":{"100000":0,"500000":10,"2000000":-20},"status":"finalist-unstable"},
+    {"opening":"B2:CCW","scores":{"100000":40,"500000":60,"2000000":70},"status":"downgraded-persistent-P0"},
+    {"opening":"B3:CW","scores":{"100000":20,"500000":-20,"2000000":0},"bestReplyStable":true,"status":"finalist"},
+    {"opening":"B3:CCW","scores":{"100000":20,"500000":-20,"2000000":0},"bestReplyStable":false,"status":"finalist"},
+    {"opening":"B4:CW","scores":{"100000":40,"500000":60,"2000000":70},"status":"downgraded-persistent-P0"},
+    {"opening":"B5:CW","scores":{"100000":0,"500000":10,"2000000":0},"bestReplyStable":true,"status":"finalist"}
+  ],
+  "deep5M": [
+    {"opening":"B1:CCW","openerScore":-80,"bestReply":"T1:CW","completedDepth":15,"nodes":5000000,"status":"downgraded-P1"},
+    {"opening":"B3:CW","openerScore":-30,"bestReply":"T1:CW","completedDepth":15,"nodes":5000000,"status":"best-current-candidate"},
+    {"opening":"B3:CCW","openerScore":-30,"bestReply":"T2:CW","completedDepth":15,"nodes":5000000,"status":"best-current-candidate"},
+    {"opening":"B5:CW","openerScore":-80,"bestReply":"T2:CCW","completedDepth":15,"nodes":5000000,"status":"downgraded-P1"}
+  ],
+  "priorStrongRedFlags": ["B1:CW", "B2:CW", "B4:CCW", "B5:CCW"],
+  "bestCurrentCandidates": ["B3:CW", "B3:CCW"],
+  "recommendation": "Do not ship a Balanced Opening Pool yet. Stress-test B3:CW and B3:CCW with higher compute, multiple independent evaluations/engines, exact endgame solving where feasible, and paired full-game play."
+}
