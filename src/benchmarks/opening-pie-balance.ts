@@ -42,6 +42,19 @@ const rows = openings.map((opening, openingIndex) => {
   }
 
   const summary = summarizePieOpening(opening, games);
+  const keepMean = summary.keep.resolvedMean;
+  const swapMean = summary.swap.resolvedMean;
+  const openerWorstCaseResolvedEv = keepMean === null || swapMean === null
+    ? null
+    : Math.min(keepMean, swapMean);
+  const branchAntisymmetryError = keepMean === null || swapMean === null
+    ? null
+    : Math.abs(keepMean + swapMean);
+  const seatValueEstimate = keepMean === null || swapMean === null
+    ? null
+    : (keepMean - swapMean) / 2;
+  const seatAdvantageMagnitude = seatValueEstimate === null ? null : Math.abs(seatValueEstimate);
+
   return {
     opening: `${opening.pit}:${opening.dir}`,
     probe: {
@@ -56,10 +69,12 @@ const rows = openings.map((opening, openingIndex) => {
     },
     keep: summary.keep,
     swap: summary.swap,
-    guaranteedResolvedEv: summary.guaranteedResolvedEv,
-    guaranteedLower: summary.guaranteedLower,
-    guaranteedUpper: summary.guaranteedUpper,
-    classification: summary.classification,
+    openerWorstCaseResolvedEv,
+    openerWorstCaseLower: summary.guaranteedLower,
+    openerWorstCaseUpper: summary.guaranteedUpper,
+    branchAntisymmetryError,
+    seatValueEstimate,
+    seatAdvantageMagnitude,
     games: summary.games.map((game) => ({
       branch: game.branch,
       moverAfterDecision: game.moverAfterDecision,
@@ -73,9 +88,10 @@ const rows = openings.map((opening, openingIndex) => {
 });
 
 rows.sort((left, right) => {
-  if (right.guaranteedLower !== left.guaranteedLower) return right.guaranteedLower - left.guaranteedLower;
-  if (right.guaranteedUpper !== left.guaranteedUpper) return right.guaranteedUpper - left.guaranteedUpper;
-  return right.probe.openerScore - left.probe.openerScore;
+  const leftSeatMagnitude = left.seatAdvantageMagnitude ?? Infinity;
+  const rightSeatMagnitude = right.seatAdvantageMagnitude ?? Infinity;
+  if (leftSeatMagnitude !== rightSeatMagnitude) return leftSeatMagnitude - rightSeatMagnitude;
+  return Math.abs(left.probe.openerScore) - Math.abs(right.probe.openerScore);
 });
 
 console.log(JSON.stringify({
@@ -85,6 +101,9 @@ console.log(JSON.stringify({
     keep: "A stays P0; B stays P1 and makes move 2",
     swap: "B takes P0; A takes P1; swap consumes B decision; A makes move 2 as P1",
     openerValue: "win=+1 draw=0 loss=-1; unresolved contributes [-1,+1] interval",
+    pieTheory: "For symmetric play with logical-seat value V after opening X: KEEP=V, SWAP=-V, responder chooses min(V,-V)=-|V|. Pie protects against opener choosing a favorable seat but does not imply a 50/50 opening.",
+    seatValueEstimate: "(KEEP_EV - SWAP_EV)/2 when both branches resolve; magnitude closer to 0 is more seat-neutral in this sample",
+    branchAntisymmetryError: "abs(KEEP_EV + SWAP_EV); 0 is expected when KEEP/SWAP differ only by agent-seat ownership",
     engine: "server production-reference Trang Nguyen production-max, no live learning snapshot",
   },
   config: {
