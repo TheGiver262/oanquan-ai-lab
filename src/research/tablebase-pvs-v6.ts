@@ -15,7 +15,10 @@ import {
 } from "./wdl-tablebase-v6.js";
 
 const INF = 1_000_000_000;
-const WDL_TERMINAL = 10_000_000;
+// Exact W/D/L must dominate every bounded/terminal V3 scalar. V3 terminal
+// scores are around +/-10,000,000 plus score margin; using a separate tier
+// prevents a proven WIN from ranking below an uncertain or margin-adjusted WIN.
+const EXACT_WDL_TERMINAL = 100_000_000;
 
 export type TablebasePlacementV6 = "leaf" | "all-low";
 
@@ -337,8 +340,8 @@ function probeTablebase(state: PolicyState, context: SearchContext): WdlTablebas
 }
 
 function wdlScore(outcome: WdlTablebaseEntryV6["outcome"]): number {
-  if (outcome === "win") return WDL_TERMINAL;
-  if (outcome === "loss") return -WDL_TERMINAL;
+  if (outcome === "win") return EXACT_WDL_TERMINAL;
+  if (outcome === "loss") return -EXACT_WDL_TERMINAL;
   return 0;
 }
 
