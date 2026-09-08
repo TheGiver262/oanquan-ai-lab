@@ -1,0 +1,92 @@
+name: v7-opening-seat-scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/hybrid-exact-oracle-v6
+    paths:
+      - ".github/workflows/v7-opening-seat-scan.yml"
+
+jobs:
+  opening-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CW
+          - B1:CCW
+          - B2:CW
+          - B2:CCW
+          - B3:CW
+          - B3:CCW
+          - B4:CW
+          - B4:CCW
+          - B5:CW
+          - B5:CCW
+    name: opening-${{ matrix.opening }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Same-engine stochastic seat scan
+        shell: bash
+        run: |
+          mkdir -p results/v7-opening-scan
+          TAG="${{ matrix.opening }}"
+          TAG="${TAG/:/-}"
+          npm run benchmark:v7:fairness -- \
+            --opening "${{ matrix.opening }}" \
+            --games 8 \
+            --ms 350 \
+            --simulations 100000 \
+            --rollout-depth 20 \
+            --max-moves 240 \
+            --seed 20280908 \
+            | tee "results/v7-opening-scan/${TAG}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-opening-scan-${{ matrix.opening }}
+          path: results/v7-opening-scan/*.json
+
+  resource-fair-tn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: [B3:CW, B3:CCW]
+    name: resource-fair-${{ matrix.opening }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: UCT-PB vs Trạng Nguyên with relaxed search-node cap
+        shell: bash
+        run: |
+          mkdir -p results/v7-resource-fair
+          TAG="${{ matrix.opening }}"
+          TAG="${TAG/:/-}"
+          npm run benchmark:v7:strength -- \
+            --a uct-pb \
+            --b trang-nguyen \
+            --opening "${{ matrix.opening }}" \
+            --games 8 \
+            --ms 1200 \
+            --nodes 500000 \
+            --simulations 200000 \
+            --rollout-depth 20 \
+            --pvs-depth 14 \
+            --max-moves 200 \
+            --seed 20280908 \
+            | tee "results/v7-resource-fair/${TAG}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-resource-fair-${{ matrix.opening }}
+          path: results/v7-resource-fair/*.json
