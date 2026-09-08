@@ -1,0 +1,143 @@
+name: v7-finalist-confirmation
+
+on:
+  push:
+    branches:
+      - research/hybrid-exact-oracle-v6
+    paths:
+      - "src/benchmarks/v7-mode-seat-fairness.ts"
+      - "package.json"
+      - ".github/workflows/v7-finalist-confirmation.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/policy-mcts-v7.test.ts tests/repetition-policy-v5.test.ts
+      - run: npm run build
+
+  raw-finalist:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - opening: B3:CW
+            tag: b3cw
+          - opening: B3:CCW
+            tag: b3ccw
+    name: raw-uctpb-vs-tn-${{ matrix.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Confirm UCT-PB vs Trạng Nguyên at production clock
+        shell: bash
+        run: |
+          mkdir -p results/v7-finalist
+          npm run benchmark:v7:strength -- \
+            --a uct-pb \
+            --b trang-nguyen \
+            --opening "${{ matrix.opening }}" \
+            --games 8 \
+            --ms 1200 \
+            --nodes 100000 \
+            --simulations 100000 \
+            --rollout-depth 20 \
+            --pvs-depth 14 \
+            --max-moves 200 \
+            --seed 20260908 \
+            | tee "results/v7-finalist/raw-${{ matrix.tag }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-finalist-raw-${{ matrix.tag }}
+          path: results/v7-finalist/*.json
+
+  mode-seat-fairness:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - opening: none
+            tag: initial
+          - opening: B3:CW
+            tag: b3cw
+          - opening: B3:CCW
+            tag: b3ccw
+    name: fairness-${{ matrix.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run seeded policy-UCT-PB self-play seat test
+        shell: bash
+        run: |
+          mkdir -p results/v7-fairness
+          npm run benchmark:v7:fairness -- \
+            --opening "${{ matrix.opening }}" \
+            --games 12 \
+            --ms 500 \
+            --simulations 100000 \
+            --rollout-depth 20 \
+            --max-moves 240 \
+            --seed 20260908 \
+            | tee "results/v7-fairness/${{ matrix.tag }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-fairness-${{ matrix.tag }}
+          path: results/v7-fairness/*.json
+
+  mode-cross-engine-confirm:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - opening: B3:CW
+            tag: b3cw
+          - opening: B3:CCW
+            tag: b3ccw
+    name: cross-${{ matrix.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Confirm cross-engine behavior under threefold
+        shell: bash
+        run: |
+          mkdir -p results/v7-cross
+          npm run benchmark:v7:mode -- \
+            --opening "${{ matrix.opening }}" \
+            --games 8 \
+            --ms 600 \
+            --pvs-nodes 80000 \
+            --pvs-depth 14 \
+            --mcts-simulations 100000 \
+            --rollout-depth 20 \
+            --max-moves 240 \
+            --seed 20270908 \
+            | tee "results/v7-cross/${{ matrix.tag }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-cross-${{ matrix.tag }}
+          path: results/v7-cross/*.json
