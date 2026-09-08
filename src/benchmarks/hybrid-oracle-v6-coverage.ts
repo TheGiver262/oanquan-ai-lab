@@ -1,6 +1,7 @@
 import { createInitialState, getLegalMoves } from "../engine.js";
-import { boardValue } from "../research/exact-endgame-v4.js";
+import { boardValue, solveExactEndgame } from "../research/exact-endgame-v4.js";
 import { solveExactPolicyState } from "../research/exact-policy-solver-v5.js";
+import { canUseCanonicalAcyclicOracle } from "../research/hybrid-exact-oracle-v6.js";
 import {
   applyPolicyMove,
   createPolicyState,
@@ -15,6 +16,11 @@ const oracleNodes = intArg("--oracle-nodes", 50_000);
 const oracleMs = intArg("--oracle-ms", 50);
 const maxProbesPerLine = intArg("--max-probes-per-line", 12);
 const policyName = stringArg("--policy") ?? "repeat3";
+const oracleMode = stringArg("--oracle-mode") ?? "policy";
+
+if (oracleMode !== "policy" && oracleMode !== "canonical-acyclic") {
+  throw new Error("--oracle-mode must be policy or canonical-acyclic");
+}
 
 const policy: RepetitionPolicy = policyName === "repeat2"
   ? { kind: "repeat-draw", occurrences: 2 }
@@ -25,8 +31,6 @@ const policy: RepetitionPolicy = policyName === "repeat2"
       : (() => { throw new Error("--policy must be repeat2, repeat3 or none"); })();
 
 const lines = Object.entries(V3_50M_PV).map(([line, pv]) => {
-  const [opening] = line.split(":", 1);
-  if (opening !== "B3") throw new Error(`Unexpected V3 line ${line}`);
   const openingKey = line.startsWith("B3:CW:") ? "B3:CW" : "B3:CCW";
   const snapshots = replayPolicyPv(openingKey, pv, policy);
   const eligible = snapshots
@@ -35,23 +39,16 @@ const lines = Object.entries(V3_50M_PV).map(([line, pv]) => {
     .slice(0, maxProbesPerLine);
 
   const probes = eligible.map((snapshot) => {
-    const result = solveExactPolicyState(snapshot.state, policy, {
-      maxRootBoardValue: maxBoardValue,
-      nodeBudget: oracleNodes,
-      timeBudgetMs: oracleMs,
-    });
+    const result = runProbe(snapshot.state);
     return {
       ply: snapshot.ply,
       moveApplied: snapshot.moveApplied,
       boardValue: snapshot.boardValue,
       currentPlayer: snapshot.state.game.currentPlayer,
       scores: snapshot.state.game.scores,
-      status: result.status,
-      solved: result.solved,
-      value: result.value,
-      outcome: result.outcome,
-      bestMove: result.bestMove ? moveKey(result.bestMove) : null,
-      diagnostics: result.diagnostics,
+      historyMaxOccurrence: maxHistoryOccurrence(snapshot.state),
+      canonicalSafe: canUseCanonicalAcyclicOracle(snapshot.state, policy),
+      ...result,
     };
   });
 
@@ -77,11 +74,14 @@ console.log(JSON.stringify({
     phase: "Hybrid Exact Oracle V6 coverage",
     sourceCorpus: "four V3 50M principal variations recorded in src/research/v3-pv-corpus.ts",
     policyHistory: "the selected repetition policy is applied during PV replay, so every oracle receives the real accumulated PolicyState rather than a fresh board-only history",
-    exactness: "a hit is counted only when solveExactPolicyState returns solved=true; budget-exhausted and cycle-unresolved probes remain unresolved",
-    purpose: "measure whether the exact oracle is tractable often enough at production-like per-probe budgets before using it in expensive match tournaments",
+    exactness: oracleMode === "policy"
+      ? "a hit is counted only when the full policy-history-aware exact solver returns solved=true"
+      : "a hit is counted only when canonical reuse is proof-safe under the current history and solveExactEndgame returns solved=true; any future cycle makes that solver unresolved",
+    purpose: "measure whether an exact oracle is tractable often enough at production-like per-probe budgets before using it in expensive match tournaments",
   },
   config: {
     policy,
+    oracleMode,
     maxBoardValue,
     oracleNodes,
     oracleMs,
@@ -92,9 +92,11 @@ console.log(JSON.stringify({
     probes: allProbes.length,
     solved: solved.length,
     hitRate: allProbes.length === 0 ? 0 : solved.length / allProbes.length,
+    canonicalSafeProbes: allProbes.filter((probe) => probe.canonicalSafe).length,
     totalOracleNodes: allProbes.reduce((sum, probe) => sum + probe.diagnostics.nodeCount, 0),
     totalPolicyDrawLeaves: allProbes.reduce((sum, probe) => sum + probe.diagnostics.policyDrawLeaves, 0),
     totalNaturalTerminalLeaves: allProbes.reduce((sum, probe) => sum + probe.diagnostics.naturalTerminalLeaves, 0),
+    totalCycleEdges: allProbes.reduce((sum, probe) => sum + probe.diagnostics.cycleEdges, 0),
     statusCounts,
   },
   lines,
@@ -106,6 +108,86 @@ type Snapshot = {
   boardValue: number;
   state: PolicyState;
 };
+
+type NormalizedProbe = {
+  status: string;
+  solved: boolean;
+  value: number | null;
+  outcome: "win" | "draw" | "loss" | null;
+  bestMove: string | null;
+  diagnostics: {
+    nodeCount: number;
+    policyDrawLeaves: number;
+    naturalTerminalLeaves: number;
+    cycleEdges: number;
+    maxDepth: number;
+    budgetReason: "node" | "time" | null;
+  };
+};
+
+function runProbe(state: PolicyState): NormalizedProbe {
+  if (oracleMode === "canonical-acyclic") {
+    if (!canUseCanonicalAcyclicOracle(state, policy)) {
+      return {
+        status: "unsafe-history",
+        solved: false,
+        value: null,
+        outcome: null,
+        bestMove: null,
+        diagnostics: {
+          nodeCount: 0,
+          policyDrawLeaves: 0,
+          naturalTerminalLeaves: 0,
+          cycleEdges: 0,
+          maxDepth: 0,
+          budgetReason: null,
+        },
+      };
+    }
+
+    const result = solveExactEndgame(state.game, {
+      maxRootBoardValue: maxBoardValue,
+      nodeBudget: oracleNodes,
+      timeBudgetMs: oracleMs,
+    });
+    return {
+      status: result.status,
+      solved: result.solved,
+      value: result.value,
+      outcome: result.outcome,
+      bestMove: result.bestMove ? moveKey(result.bestMove) : null,
+      diagnostics: {
+        nodeCount: result.diagnostics.nodeCount,
+        policyDrawLeaves: 0,
+        naturalTerminalLeaves: 0,
+        cycleEdges: result.diagnostics.cycleEdges,
+        maxDepth: result.diagnostics.maxDepth,
+        budgetReason: result.diagnostics.budgetReason,
+      },
+    };
+  }
+
+  const result = solveExactPolicyState(state, policy, {
+    maxRootBoardValue: maxBoardValue,
+    nodeBudget: oracleNodes,
+    timeBudgetMs: oracleMs,
+  });
+  return {
+    status: result.status,
+    solved: result.solved,
+    value: result.value,
+    outcome: result.outcome,
+    bestMove: result.bestMove ? moveKey(result.bestMove) : null,
+    diagnostics: {
+      nodeCount: result.diagnostics.nodeCount,
+      policyDrawLeaves: result.diagnostics.policyDrawLeaves,
+      naturalTerminalLeaves: result.diagnostics.naturalTerminalLeaves,
+      cycleEdges: result.diagnostics.cycleEdges,
+      maxDepth: result.diagnostics.maxDepth,
+      budgetReason: result.diagnostics.budgetReason,
+    },
+  };
+}
 
 function replayPolicyPv(
   openingKey: string,
@@ -152,6 +234,12 @@ function clonePolicyState(state: PolicyState): PolicyState {
     plies: state.plies,
     adjudication: state.adjudication ? structuredClone(state.adjudication) : null,
   };
+}
+
+function maxHistoryOccurrence(state: PolicyState): number {
+  let max = 0;
+  for (const count of state.repetitionCounts.values()) max = Math.max(max, count);
+  return max;
 }
 
 function findMove(state: PolicyState, key: string): PlayerMove {
