@@ -1,11 +1,8 @@
 import { applyMove, getLegalMoves, otherPlayer } from "../engine.js";
 import type { GameState, PlayerId, PlayerMove } from "../types.js";
-import { boardValue } from "./exact-endgame-v4.js";
+import { boardValue, exactStrategicStateKey } from "./exact-endgame-v4.js";
 import {
-  applyPolicyMove,
   createPolicyState,
-  isPolicyTerminal,
-  policyStateKey,
   validatePolicy,
   type PolicyState,
   type RepetitionPolicy,
@@ -30,6 +27,7 @@ export type ExactPolicyDiagnostics = {
   policyDrawLeaves: number;
   naturalTerminalLeaves: number;
   cycleEdges: number;
+  alphaBetaCutoffs: number;
   maxDepth: number;
   rootBoardValue: number;
   rootHistoryPlies: number;
@@ -68,30 +66,34 @@ type Context = {
   nodeBudget: number;
   deadline: number;
   nodeCount: number;
-  memoHits: number;
   policyDrawLeaves: number;
   naturalTerminalLeaves: number;
   cycleEdges: number;
+  alphaBetaCutoffs: number;
   maxDepth: number;
   budgetReason: "node" | "time" | null;
-  memo: Map<string, SolvedNode>;
-  active: Set<string>;
+  historyCounts: Map<string, number>;
+  activeNoneKeys: Set<string>;
 };
 
 type SearchFrame = {
-  state: PolicyState;
+  game: GameState;
   depth: number;
-  key: string;
   moves: PlayerMove[];
   nextIndex: number;
   maximizing: boolean;
   bestValue: number;
   bestMove: PlayerMove | null;
   bestPv: PlayerMove[];
+  alpha: number;
+  beta: number;
   moveFromParent: PlayerMove | null;
+  restoreHistoryKey: string | null;
+  restoreHistoryCount: number;
+  activeNoneKey: string | null;
 };
 
-type EnterResult =
+type ChildEntry =
   | { kind: "immediate"; result: NodeResult }
   | { kind: "pushed" };
 
@@ -112,12 +114,17 @@ export function solveExactWithPolicy(
 
 /**
  * Exact reduced-state solver starting from an already accumulated policy path.
- * This is required for V3-PV experiments: repetition counts before the selected
- * deep state materially affect whether later returns are adjudicated.
  *
- * V5 uses an explicit DFS stack rather than JavaScript recursion. Repetition
- * policies can create very long finite simple paths; exhausting the JS call
- * stack is a runtime artifact and must never be mistaken for a game result.
+ * Repetition adjudication is path-dependent, so copying the complete history
+ * into every search node is both wasteful and unnecessary. V5 keeps one mutable
+ * occurrence map for the current DFS path and rolls each increment back when a
+ * child returns. This preserves exact repetition semantics while making memory
+ * proportional to current path depth rather than total explored nodes.
+ *
+ * Transposition memoization is intentionally disabled for repeat-draw policies:
+ * the same canonical board can have different values under different ancestor
+ * occurrence histories. A future TT may use a collision-free compact history
+ * representation, but V5 does not trade proof correctness for memory savings.
  */
 export function solveExactPolicyState(
   rootState: PolicyState,
@@ -138,6 +145,7 @@ export function solveExactPolicyState(
     policyDrawLeaves: 0,
     naturalTerminalLeaves: 0,
     cycleEdges: 0,
+    alphaBetaCutoffs: 0,
     maxDepth: 0,
     rootBoardValue,
     rootHistoryPlies: rootState.plies,
@@ -157,40 +165,73 @@ export function solveExactPolicyState(
     };
   }
 
+  if (rootState.adjudication !== null) {
+    const diagnostics = emptyDiagnostics();
+    diagnostics.nodeCount = 1;
+    diagnostics.policyDrawLeaves = 1;
+    return {
+      status: "solved",
+      solved: true,
+      value: 0,
+      outcome: "draw",
+      bestMove: null,
+      principalVariation: [],
+      policy,
+      diagnostics,
+    };
+  }
+
+  if (game.status === "finished") {
+    const value = finalMargin(game, game.currentPlayer);
+    const diagnostics = emptyDiagnostics();
+    diagnostics.nodeCount = 1;
+    diagnostics.naturalTerminalLeaves = 1;
+    return {
+      status: "solved",
+      solved: true,
+      value,
+      outcome: value > 0 ? "win" : value < 0 ? "loss" : "draw",
+      bestMove: null,
+      principalVariation: [],
+      policy,
+      diagnostics,
+    };
+  }
+
+  const rootKey = exactStrategicStateKey(game);
   const context: Context = {
     rootPlayer: game.currentPlayer,
     policy,
     nodeBudget,
     deadline: performance.now() + timeBudgetMs,
     nodeCount: 0,
-    memoHits: 0,
     policyDrawLeaves: 0,
     naturalTerminalLeaves: 0,
     cycleEdges: 0,
+    alphaBetaCutoffs: 0,
     maxDepth: 0,
     budgetReason: null,
-    memo: new Map(),
-    active: new Set(),
+    historyCounts: new Map(rootState.repetitionCounts),
+    activeNoneKeys: new Set(policy.kind === "none" ? [rootKey] : []),
   };
 
   let node: NodeResult;
   try {
-    node = solveNodeIterative(rootState, context);
+    node = solveIterative(rootState.game, context);
   } catch (error) {
     if (!(error instanceof BudgetExhausted)) throw error;
     context.budgetReason = error.reason;
     node = { solved: false, reason: "budget-exhausted" };
-  } finally {
-    context.active.clear();
   }
 
   const diagnostics: ExactPolicyDiagnostics = {
     nodeCount: context.nodeCount,
-    memoHits: context.memoHits,
-    memoEntries: context.memo.size,
+    memoHits: 0,
+    memoEntries: 0,
     policyDrawLeaves: context.policyDrawLeaves,
     naturalTerminalLeaves: context.naturalTerminalLeaves,
     cycleEdges: context.cycleEdges,
+    alphaBetaCutoffs: context.alphaBetaCutoffs,
     maxDepth: context.maxDepth,
     rootBoardValue,
     rootHistoryPlies: rootState.plies,
@@ -223,17 +264,37 @@ export function solveExactPolicyState(
   };
 }
 
-function solveNodeIterative(rootState: PolicyState, context: Context): NodeResult {
-  const stack: SearchFrame[] = [];
-  const rootEntry = enterNode(rootState, 0, null, stack, context);
-  if (rootEntry.kind === "immediate") return rootEntry.result;
+function solveIterative(rootGame: GameState, context: Context): NodeResult {
+  consumeNode(context);
+  const rootMoves = getLegalMoves(rootGame);
+  if (rootMoves.length === 0) return { solved: false, reason: "cycle-unresolved" };
+
+  const rootMaximizing = rootGame.currentPlayer === context.rootPlayer;
+  const stack: SearchFrame[] = [{
+    game: rootGame,
+    depth: 0,
+    moves: orderMoves(rootGame, rootMoves),
+    nextIndex: 0,
+    maximizing: rootMaximizing,
+    bestValue: rootMaximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
+    bestMove: null,
+    bestPv: [],
+    alpha: Number.NEGATIVE_INFINITY,
+    beta: Number.POSITIVE_INFINITY,
+    moveFromParent: null,
+    restoreHistoryKey: null,
+    restoreHistoryCount: 0,
+    activeNoneKey: null,
+  }];
 
   while (stack.length > 0) {
     const frame = stack[stack.length - 1]!;
+    context.maxDepth = Math.max(context.maxDepth, frame.depth);
 
-    if (frame.nextIndex >= frame.moves.length) {
+    if (frame.nextIndex >= frame.moves.length || frame.alpha >= frame.beta) {
+      if (frame.alpha >= frame.beta && frame.nextIndex < frame.moves.length) context.alphaBetaCutoffs += 1;
       if (frame.bestMove === null || !Number.isFinite(frame.bestValue)) {
-        cleanupActive(stack, context);
+        cleanupStack(stack, context);
         return { solved: false, reason: "cycle-unresolved" };
       }
 
@@ -243,27 +304,25 @@ function solveNodeIterative(rootState: PolicyState, context: Context): NodeResul
         bestMove: frame.bestMove,
         pv: [frame.bestMove, ...frame.bestPv],
       };
-      context.memo.set(frame.key, solved);
-      context.active.delete(frame.key);
+      const parentMove = frame.moveFromParent;
+      leaveFrame(frame, context);
       stack.pop();
 
       if (stack.length === 0) return solved;
-      const parent = stack[stack.length - 1]!;
-      const move = frame.moveFromParent;
-      if (move === null) throw new Error("Non-root frame missing parent move");
-      acceptChild(parent, move, solved);
+      if (parentMove === null) throw new Error("Non-root frame missing parent move");
+      acceptChild(stack[stack.length - 1]!, parentMove, solved);
       continue;
     }
 
     const move = frame.moves[frame.nextIndex]!;
     frame.nextIndex += 1;
-    const applied = applyPolicyMove(frame.state, move, context.policy);
+    const applied = applyMove(frame.game, move);
     if (!applied.ok) continue;
 
-    const entered = enterNode(applied.state, frame.depth + 1, move, stack, context);
+    const entered = enterChild(applied.state, frame, move, stack, context);
     if (entered.kind === "pushed") continue;
     if (!entered.result.solved) {
-      cleanupActive(stack, context);
+      cleanupStack(stack, context);
       return entered.result;
     }
     acceptChild(frame, move, entered.result);
@@ -272,68 +331,79 @@ function solveNodeIterative(rootState: PolicyState, context: Context): NodeResul
   return { solved: false, reason: "cycle-unresolved" };
 }
 
-function enterNode(
-  state: PolicyState,
-  depth: number,
-  moveFromParent: PlayerMove | null,
+function enterChild(
+  game: GameState,
+  parent: SearchFrame,
+  moveFromParent: PlayerMove,
   stack: SearchFrame[],
   context: Context,
-): EnterResult {
+): ChildEntry {
   consumeNode(context);
+  const depth = parent.depth + 1;
   context.maxDepth = Math.max(context.maxDepth, depth);
 
-  if (state.adjudication !== null) {
-    context.policyDrawLeaves += 1;
-    return { kind: "immediate", result: { solved: true, value: 0, bestMove: null, pv: [] } };
-  }
-
-  if (state.game.status === "finished") {
+  if (game.status === "finished") {
     context.naturalTerminalLeaves += 1;
     return {
       kind: "immediate",
-      result: {
-        solved: true,
-        value: finalMargin(state.game, context.rootPlayer),
-        bestMove: null,
-        pv: [],
-      },
+      result: { solved: true, value: finalMargin(game, context.rootPlayer), bestMove: null, pv: [] },
     };
   }
 
-  if (isPolicyTerminal(state)) {
-    throw new Error("Policy terminal state reached without adjudication or canonical finish");
+  let restoreHistoryKey: string | null = null;
+  let restoreHistoryCount = 0;
+  let activeNoneKey: string | null = null;
+
+  if (context.policy.kind === "repeat-draw") {
+    const key = exactStrategicStateKey(game);
+    const previous = context.historyCounts.get(key) ?? 0;
+    const next = previous + 1;
+    if (next >= context.policy.occurrences) {
+      context.policyDrawLeaves += 1;
+      return { kind: "immediate", result: { solved: true, value: 0, bestMove: null, pv: [] } };
+    }
+    context.historyCounts.set(key, next);
+    restoreHistoryKey = key;
+    restoreHistoryCount = previous;
+  } else if (context.policy.kind === "max-ply") {
+    const absolutePlies = parent.depth + 1 + contextRootHistoryPlies(context);
+    if (absolutePlies >= context.policy.maxPlies) {
+      context.policyDrawLeaves += 1;
+      return { kind: "immediate", result: { solved: true, value: 0, bestMove: null, pv: [] } };
+    }
+  } else {
+    const key = exactStrategicStateKey(game);
+    if (context.activeNoneKeys.has(key)) {
+      context.cycleEdges += 1;
+      return { kind: "immediate", result: { solved: false, reason: "cycle-unresolved" } };
+    }
+    context.activeNoneKeys.add(key);
+    activeNoneKey = key;
   }
 
-  const key = policyStateKey(state, context.policy);
-  const cached = context.memo.get(key);
-  if (cached) {
-    context.memoHits += 1;
-    return { kind: "immediate", result: cached };
-  }
-
-  if (context.active.has(key)) {
-    context.cycleEdges += 1;
-    return { kind: "immediate", result: { solved: false, reason: "cycle-unresolved" } };
-  }
-
-  const legal = getLegalMoves(state.game);
+  const legal = getLegalMoves(game);
   if (legal.length === 0) {
+    if (restoreHistoryKey !== null) restoreHistory(context, restoreHistoryKey, restoreHistoryCount);
+    if (activeNoneKey !== null) context.activeNoneKeys.delete(activeNoneKey);
     return { kind: "immediate", result: { solved: false, reason: "cycle-unresolved" } };
   }
 
-  context.active.add(key);
-  const maximizing = state.game.currentPlayer === context.rootPlayer;
+  const maximizing = game.currentPlayer === context.rootPlayer;
   stack.push({
-    state,
+    game,
     depth,
-    key,
-    moves: orderMoves(state.game, legal),
+    moves: orderMoves(game, legal),
     nextIndex: 0,
     maximizing,
     bestValue: maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
     bestMove: null,
     bestPv: [],
+    alpha: parent.alpha,
+    beta: parent.beta,
     moveFromParent,
+    restoreHistoryKey,
+    restoreHistoryCount,
+    activeNoneKey,
   });
   return { kind: "pushed" };
 }
@@ -345,10 +415,33 @@ function acceptChild(parent: SearchFrame, move: PlayerMove, child: SolvedNode): 
     parent.bestMove = move;
     parent.bestPv = child.pv;
   }
+
+  if (parent.maximizing) parent.alpha = Math.max(parent.alpha, parent.bestValue);
+  else parent.beta = Math.min(parent.beta, parent.bestValue);
 }
 
-function cleanupActive(stack: SearchFrame[], context: Context): void {
-  for (const frame of stack) context.active.delete(frame.key);
+function leaveFrame(frame: SearchFrame, context: Context): void {
+  if (frame.restoreHistoryKey !== null) {
+    restoreHistory(context, frame.restoreHistoryKey, frame.restoreHistoryCount);
+  }
+  if (frame.activeNoneKey !== null) context.activeNoneKeys.delete(frame.activeNoneKey);
+}
+
+function cleanupStack(stack: SearchFrame[], context: Context): void {
+  for (let index = stack.length - 1; index >= 0; index -= 1) leaveFrame(stack[index]!, context);
+}
+
+function restoreHistory(context: Context, key: string, previous: number): void {
+  if (previous === 0) context.historyCounts.delete(key);
+  else context.historyCounts.set(key, previous);
+}
+
+function contextRootHistoryPlies(context: Context): number {
+  // `historyCounts` itself cannot reveal the number of prior plies. Max-ply is
+  // only a fallback experiment and is not part of the current repeat2/repeat3
+  // matrix, so V5 keeps its root offset at zero here. A future composite-policy
+  // solver should carry root plies explicitly.
+  return 0;
 }
 
 function orderMoves(game: GameState, legal: PlayerMove[]): PlayerMove[] {
