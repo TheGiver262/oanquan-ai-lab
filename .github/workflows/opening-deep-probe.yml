@@ -1,0 +1,33 @@
+name: opening-deep-probe
+on:
+  push:
+    branches:
+      - research/opening-pie-balance
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CCW
+          - B5:CW
+          - B3:CW
+          - B3:CCW
+    name: deep-probe (${{ matrix.opening }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run 500k-node bounded probe
+        run: >-
+          npx tsx src/benchmarks/opening-deep-probe.ts
+          --opening "${{ matrix.opening }}"
+          --depth 11
+          --nodes 500000
+          --time 5000
