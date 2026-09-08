@@ -1,0 +1,35 @@
+name: opening-balance-v2-finalists
+on:
+  push:
+    branches:
+      - research/opening-balance-v2
+  workflow_dispatch:
+
+jobs:
+  deep-probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CCW
+          - B3:CW
+          - B3:CCW
+          - B5:CW
+    name: deep (${{ matrix.opening }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/negamax-pvs.test.ts
+      - name: Run 5M-node finalist probe
+        run: >-
+          npm run benchmark:openings:v2 --
+          --opening "${{ matrix.opening }}"
+          --budgets 5000000
+          --depth 24
+          --time 120000
+          --aspiration 250
