@@ -26,7 +26,8 @@
     "benchmark:openings:v5:policy-aware-selfplay": "tsx src/benchmarks/opening-balance-v5-policy-aware-selfplay.ts",
     "benchmark:v6:oracle-coverage": "tsx src/benchmarks/hybrid-oracle-v6-coverage.ts",
     "benchmark:v6:wdl-graph": "tsx src/benchmarks/wdl-graph-v6-coverage.ts",
-    "benchmark:v6:wdl-ab": "tsx src/benchmarks/hybrid-wdl-v6-ab.ts"
+    "benchmark:v6:wdl-ab": "tsx src/benchmarks/hybrid-wdl-v6-ab.ts",
+    "benchmark:v6:tablebase-holdout": "tsx src/benchmarks/tablebase-v6-holdout.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
