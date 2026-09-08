@@ -1,4 +1,4 @@
-import { getLegalMoves, otherPlayer } from "../engine.js";
+import { applyMove, getLegalMoves, otherPlayer } from "../engine.js";
 import type { GameState, PlayerId, PlayerMove } from "../types.js";
 import { boardValue } from "./exact-endgame-v4.js";
 import {
@@ -78,6 +78,23 @@ type Context = {
   active: Set<string>;
 };
 
+type SearchFrame = {
+  state: PolicyState;
+  depth: number;
+  key: string;
+  moves: PlayerMove[];
+  nextIndex: number;
+  maximizing: boolean;
+  bestValue: number;
+  bestMove: PlayerMove | null;
+  bestPv: PlayerMove[];
+  moveFromParent: PlayerMove | null;
+};
+
+type EnterResult =
+  | { kind: "immediate"; result: NodeResult }
+  | { kind: "pushed" };
+
 class BudgetExhausted extends Error {
   constructor(readonly reason: "node" | "time") {
     super(reason);
@@ -97,6 +114,10 @@ export function solveExactWithPolicy(
  * Exact reduced-state solver starting from an already accumulated policy path.
  * This is required for V3-PV experiments: repetition counts before the selected
  * deep state materially affect whether later returns are adjudicated.
+ *
+ * V5 uses an explicit DFS stack rather than JavaScript recursion. Repetition
+ * policies can create very long finite simple paths; exhausting the JS call
+ * stack is a runtime artifact and must never be mistaken for a game result.
  */
 export function solveExactPolicyState(
   rootState: PolicyState,
@@ -154,11 +175,13 @@ export function solveExactPolicyState(
 
   let node: NodeResult;
   try {
-    node = solveNode(rootState, 0, context);
+    node = solveNodeIterative(rootState, context);
   } catch (error) {
     if (!(error instanceof BudgetExhausted)) throw error;
     context.budgetReason = error.reason;
     node = { solved: false, reason: "budget-exhausted" };
+  } finally {
+    context.active.clear();
   }
 
   const diagnostics: ExactPolicyDiagnostics = {
@@ -200,22 +223,80 @@ export function solveExactPolicyState(
   };
 }
 
-function solveNode(state: PolicyState, depth: number, context: Context): NodeResult {
+function solveNodeIterative(rootState: PolicyState, context: Context): NodeResult {
+  const stack: SearchFrame[] = [];
+  const rootEntry = enterNode(rootState, 0, null, stack, context);
+  if (rootEntry.kind === "immediate") return rootEntry.result;
+
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1]!;
+
+    if (frame.nextIndex >= frame.moves.length) {
+      if (frame.bestMove === null || !Number.isFinite(frame.bestValue)) {
+        cleanupActive(stack, context);
+        return { solved: false, reason: "cycle-unresolved" };
+      }
+
+      const solved: SolvedNode = {
+        solved: true,
+        value: normalizeZero(frame.bestValue),
+        bestMove: frame.bestMove,
+        pv: [frame.bestMove, ...frame.bestPv],
+      };
+      context.memo.set(frame.key, solved);
+      context.active.delete(frame.key);
+      stack.pop();
+
+      if (stack.length === 0) return solved;
+      const parent = stack[stack.length - 1]!;
+      const move = frame.moveFromParent;
+      if (move === null) throw new Error("Non-root frame missing parent move");
+      acceptChild(parent, move, solved);
+      continue;
+    }
+
+    const move = frame.moves[frame.nextIndex]!;
+    frame.nextIndex += 1;
+    const applied = applyPolicyMove(frame.state, move, context.policy);
+    if (!applied.ok) continue;
+
+    const entered = enterNode(applied.state, frame.depth + 1, move, stack, context);
+    if (entered.kind === "pushed") continue;
+    if (!entered.result.solved) {
+      cleanupActive(stack, context);
+      return entered.result;
+    }
+    acceptChild(frame, move, entered.result);
+  }
+
+  return { solved: false, reason: "cycle-unresolved" };
+}
+
+function enterNode(
+  state: PolicyState,
+  depth: number,
+  moveFromParent: PlayerMove | null,
+  stack: SearchFrame[],
+  context: Context,
+): EnterResult {
   consumeNode(context);
   context.maxDepth = Math.max(context.maxDepth, depth);
 
   if (state.adjudication !== null) {
     context.policyDrawLeaves += 1;
-    return { solved: true, value: 0, bestMove: null, pv: [] };
+    return { kind: "immediate", result: { solved: true, value: 0, bestMove: null, pv: [] } };
   }
 
   if (state.game.status === "finished") {
     context.naturalTerminalLeaves += 1;
     return {
-      solved: true,
-      value: finalMargin(state.game, context.rootPlayer),
-      bestMove: null,
-      pv: [],
+      kind: "immediate",
+      result: {
+        solved: true,
+        value: finalMargin(state.game, context.rootPlayer),
+        bestMove: null,
+        pv: [],
+      },
     };
   }
 
@@ -227,53 +308,47 @@ function solveNode(state: PolicyState, depth: number, context: Context): NodeRes
   const cached = context.memo.get(key);
   if (cached) {
     context.memoHits += 1;
-    return cached;
+    return { kind: "immediate", result: cached };
   }
 
   if (context.active.has(key)) {
     context.cycleEdges += 1;
-    return { solved: false, reason: "cycle-unresolved" };
+    return { kind: "immediate", result: { solved: false, reason: "cycle-unresolved" } };
+  }
+
+  const legal = getLegalMoves(state.game);
+  if (legal.length === 0) {
+    return { kind: "immediate", result: { solved: false, reason: "cycle-unresolved" } };
   }
 
   context.active.add(key);
-  try {
-    const legal = getLegalMoves(state.game);
-    if (legal.length === 0) return { solved: false, reason: "cycle-unresolved" };
+  const maximizing = state.game.currentPlayer === context.rootPlayer;
+  stack.push({
+    state,
+    depth,
+    key,
+    moves: orderMoves(state.game, legal),
+    nextIndex: 0,
+    maximizing,
+    bestValue: maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY,
+    bestMove: null,
+    bestPv: [],
+    moveFromParent,
+  });
+  return { kind: "pushed" };
+}
 
-    const maximizing = state.game.currentPlayer === context.rootPlayer;
-    let bestValue = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
-    let bestMove: PlayerMove | null = null;
-    let bestPv: PlayerMove[] = [];
-
-    for (const move of orderMoves(state.game, legal)) {
-      const applied = applyPolicyMove(state, move, context.policy);
-      if (!applied.ok) continue;
-      const child = solveNode(applied.state, depth + 1, context);
-      if (!child.solved) return child;
-
-      const better = maximizing ? child.value > bestValue : child.value < bestValue;
-      if (better || (child.value === bestValue && compareMove(move, bestMove) < 0)) {
-        bestValue = child.value;
-        bestMove = move;
-        bestPv = child.pv;
-      }
-    }
-
-    if (bestMove === null || !Number.isFinite(bestValue)) {
-      return { solved: false, reason: "cycle-unresolved" };
-    }
-
-    const solved: SolvedNode = {
-      solved: true,
-      value: normalizeZero(bestValue),
-      bestMove,
-      pv: [bestMove, ...bestPv],
-    };
-    context.memo.set(key, solved);
-    return solved;
-  } finally {
-    context.active.delete(key);
+function acceptChild(parent: SearchFrame, move: PlayerMove, child: SolvedNode): void {
+  const better = parent.maximizing ? child.value > parent.bestValue : child.value < parent.bestValue;
+  if (better || (child.value === parent.bestValue && compareMove(move, parent.bestMove) < 0)) {
+    parent.bestValue = child.value;
+    parent.bestMove = move;
+    parent.bestPv = child.pv;
   }
+}
+
+function cleanupActive(stack: SearchFrame[], context: Context): void {
+  for (const frame of stack) context.active.delete(frame.key);
 }
 
 function orderMoves(game: GameState, legal: PlayerMove[]): PlayerMove[] {
@@ -281,8 +356,8 @@ function orderMoves(game: GameState, legal: PlayerMove[]): PlayerMove[] {
   return legal
     .map((move) => {
       const before = game.scores[player];
-      const probe = applyPolicyMove(createPolicyState(game), move, { kind: "none" });
-      const gain = probe.ok ? probe.state.game.scores[player] - before : Number.NEGATIVE_INFINITY;
+      const probe = applyMove(game, move);
+      const gain = probe.ok ? probe.state.scores[player] - before : Number.NEGATIVE_INFINITY;
       return { move, gain };
     })
     .sort((a, b) => b.gain - a.gain || compareMove(a.move, b.move))
