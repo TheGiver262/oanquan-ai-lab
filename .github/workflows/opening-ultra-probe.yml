@@ -1,0 +1,36 @@
+name: opening-ultra-probe
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CW
+          - B1:CCW
+          - B2:CW
+          - B2:CCW
+          - B3:CW
+          - B3:CCW
+          - B4:CW
+          - B4:CCW
+          - B5:CW
+          - B5:CCW
+    name: ultra-probe (${{ matrix.opening }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Run 2m-node bounded probe
+        run: >-
+          npx tsx src/benchmarks/opening-deep-probe.ts
+          --opening "${{ matrix.opening }}"
+          --depth 11
+          --nodes 2000000
+          --time 15000

@@ -1,0 +1,41 @@
+name: opening-pie-diagnosis
+on:
+  workflow_dispatch:
+
+jobs:
+  opening:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CW
+          - B1:CCW
+          - B2:CW
+          - B2:CCW
+          - B3:CW
+          - B3:CCW
+          - B4:CW
+          - B4:CCW
+          - B5:CW
+          - B5:CCW
+    name: opening (${{ matrix.opening }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Probe and self-play KEEP/SWAP
+        run: >-
+          npx tsx src/benchmarks/opening-pie-balance.ts
+          --opening "${{ matrix.opening }}"
+          --replicates 3
+          --time 1200
+          --nodes 100000
+          --max-moves 160
+          --probe-depth 11
+          --probe-time 1200
+          --probe-nodes 100000
+          --seed 20260908
