@@ -2,11 +2,7 @@ import type { GameState, PlayerMove } from "../types.js";
 import {
   analyzeReachableEndgameGraph,
   type BuiltEndgameGraph,
-  type EndgameGraphNode,
 } from "./endgame-graph-v4.js";
-import {
-  canUseCanonicalAcyclicOracle,
-} from "./hybrid-exact-oracle-v6.js";
 import type { PolicyState, RepetitionPolicy } from "./repetition-policy-v5.js";
 
 export type Wdl = "win" | "draw" | "loss" | "unknown";
@@ -110,20 +106,27 @@ export function proveWdlByGraphV6(
     nodeBudget: options.nodeBudget ?? 50_000,
     timeBudgetMs: options.timeBudgetMs ?? 100,
   });
-  return solveBuiltGraph(root, built, policy);
+  return solveBuiltGraph(built, policy);
 }
 
+/**
+ * History condition under which a board-only future graph remains sound for
+ * threefold WDL analysis.
+ *
+ * If every pre-root strategic state has occurred at most once, a future first
+ * revisit only creates occurrence #2. Reaching #3 requires an actual repeated
+ * state inside the future graph, which the graph model represents as cycling.
+ */
 export function isGraphWdlHistorySafe(state: PolicyState, policy: RepetitionPolicy): boolean {
   if (policy.kind === "none") return true;
   if (policy.kind !== "repeat-draw" || policy.occurrences !== 3) return false;
-  // Reuse the same conservative history condition as the canonical acyclic
-  // oracle. Under threefold, count <= 1 means a future ancestor hit is only the
-  // second occurrence; a third requires an actual future repeat in the graph.
-  return canUseCanonicalAcyclicOracle(state, policy);
+  for (const count of state.repetitionCounts.values()) {
+    if (count > 1) return false;
+  }
+  return true;
 }
 
 function solveBuiltGraph(
-  root: PolicyState,
   built: BuiltEndgameGraph,
   policy: RepetitionPolicy,
 ): GraphWdlProofResult {
@@ -226,6 +229,9 @@ function solveBuiltGraph(
 
 function terminalOutcome(state: GameState): Exclude<Wdl, "unknown"> {
   if (state.winner === null) return "draw";
+  // The canonical engine leaves currentPlayer as the player who made the final
+  // move when that move ends the game, so winner-vs-currentPlayer is the correct
+  // terminal outcome from this graph node's player-to-move perspective.
   return state.winner === state.currentPlayer ? "win" : "loss";
 }
 
