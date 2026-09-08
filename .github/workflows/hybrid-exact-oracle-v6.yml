@@ -6,11 +6,15 @@ on:
       - research/hybrid-exact-oracle-v6
     paths:
       - "src/research/hybrid-exact-oracle-v6.ts"
+      - "src/research/wdl-graph-proof-v6.ts"
+      - "src/research/endgame-graph-v4.ts"
       - "src/research/exact-policy-solver-v5.ts"
       - "src/research/repetition-policy-v5.ts"
       - "src/research/v3-pv-corpus.ts"
       - "src/benchmarks/hybrid-oracle-v6-coverage.ts"
+      - "src/benchmarks/wdl-graph-v6-coverage.ts"
       - "tests/hybrid-exact-oracle-v6.test.ts"
+      - "tests/wdl-graph-proof-v6.test.ts"
       - ".github/workflows/hybrid-exact-oracle-v6.yml"
   workflow_dispatch:
 
@@ -24,11 +28,43 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run typecheck
-      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts
+      - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/wdl-graph-proof-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/endgame-graph-v4.test.ts
       - run: npm run build
 
-  coverage:
+  wdl-coverage:
     needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        max_board_value: [8, 12, 16]
+        graph_nodes: [50000, 200000]
+    name: wdl-coverage (board=${{ matrix.max_board_value }}, nodes=${{ matrix.graph_nodes }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Probe threefold graph-WDL coverage
+        shell: bash
+        run: |
+          mkdir -p results/v6-wdl
+          npm run benchmark:v6:wdl-graph -- \
+            --max-board-value "${{ matrix.max_board_value }}" \
+            --graph-nodes "${{ matrix.graph_nodes }}" \
+            --graph-ms 2000 \
+            --max-probes-per-line 12 \
+            | tee "results/v6-wdl/wdl-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-wdl-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}
+          path: results/v6-wdl/*.json
+
+  legacy-exact-coverage:
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     strategy:
@@ -37,14 +73,14 @@ jobs:
         oracle_mode: [policy, canonical-acyclic]
         max_board_value: [8, 12, 16]
         oracle_nodes: [5000, 50000]
-    name: coverage (${{ matrix.oracle_mode }}, board=${{ matrix.max_board_value }}, nodes=${{ matrix.oracle_nodes }})
+    name: legacy-coverage (${{ matrix.oracle_mode }}, board=${{ matrix.max_board_value }}, nodes=${{ matrix.oracle_nodes }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm install
-      - name: Probe threefold exact-oracle coverage
+      - name: Probe exact-margin oracle coverage
         shell: bash
         run: |
           mkdir -p results/v6
