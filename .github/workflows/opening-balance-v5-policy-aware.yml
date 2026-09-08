@@ -1,0 +1,69 @@
+name: opening-balance-v5-policy-aware
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/repetition-policy-v5
+    paths:
+      - ".github/workflows/opening-balance-v5-policy-aware.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts
+      - run: npm run build
+
+  policy-aware:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: [B3-CW, B3-CCW]
+        policy: [repeat2, repeat3]
+        pair:
+          - aware-strategic__aware-material
+          - aware-strategic__blind-strategic
+          - aware-strategic__trang-nguyen
+    name: aware (${{ matrix.opening }}, ${{ matrix.policy }}, ${{ matrix.pair }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run repetition-aware paired games
+        shell: bash
+        run: |
+          mkdir -p results/v5-aware
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          PAIR="${{ matrix.pair }}"
+          A="${PAIR%%__*}"
+          B="${PAIR##*__}"
+          npm run benchmark:openings:v5:policy-aware-selfplay -- \
+            --opening "$OPENING" \
+            --policy "${{ matrix.policy }}" \
+            --a "$A" \
+            --b "$B" \
+            --games 2 \
+            --pvs-nodes 30000 \
+            --pvs-depth 12 \
+            --pvs-ms 300 \
+            --production-nodes 30000 \
+            --production-ms 300 \
+            --max-moves 240 \
+            | tee "results/v5-aware/${{ matrix.opening }}-${{ matrix.policy }}-${{ matrix.pair }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v5-aware-${{ matrix.opening }}-${{ matrix.policy }}-${{ matrix.pair }}
+          path: results/v5-aware/*.json
