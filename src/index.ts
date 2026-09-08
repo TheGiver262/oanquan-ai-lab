@@ -9,3 +9,4 @@ export * from "./research/v3-pv-corpus.js";
 export * from "./research/repetition-policy-v5.js";
 export * from "./research/exact-policy-solver-v5.js";
 export * from "./research/pv-policy-replay-v5.js";
+export * from "./research/policy-aware-pvs-v5.js";
