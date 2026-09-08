@@ -1,0 +1,37 @@
+name: opening-balance-v2
+on:
+  push:
+    branches:
+      - research/opening-balance-v2
+  workflow_dispatch:
+
+jobs:
+  convergence:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1:CCW
+          - B2:CCW
+          - B3:CW
+          - B3:CCW
+          - B4:CW
+          - B5:CW
+    name: v2 (${{ matrix.opening }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/negamax-pvs.test.ts
+      - name: Run independent convergence probe
+        run: >-
+          npm run benchmark:openings:v2 --
+          --opening "${{ matrix.opening }}"
+          --budgets 100000,500000,2000000
+          --depth 20
+          --time 30000
+          --aspiration 250
