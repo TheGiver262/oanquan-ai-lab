@@ -1,0 +1,125 @@
+{
+  "phase": "Opening Balance V4",
+  "scope": {
+    "repository": "TheGiver262/oanquan-ai-lab",
+    "productionModified": false,
+    "finalObjective": [
+      "best comprehensive AI/search stack",
+      "most balanced competitive mode/ruleset"
+    ]
+  },
+  "exactProbeConclusion": {
+    "allFourV3FinalistPvFamilies": "cycle-unresolved",
+    "nodeBudgetWasBinding": false,
+    "timeBudgetWasBinding": false,
+    "lowestObservedProblemBoardValue": 8,
+    "interpretation": "current game graph is loopy; simple exact DFS is structurally insufficient without repetition semantics or loopy graph solving"
+  },
+  "sccGraphProbe": {
+    "workflowRun": 34187542518,
+    "head": "4597729398ce569b2a3d4c20216a49d4a9cc294d",
+    "perProbeNodeCap": 100000,
+    "results": [
+      {
+        "opening": "B3:CW",
+        "evaluation": "material",
+        "rootPly": 20,
+        "rootBoardValue": 13,
+        "rootScores": { "P0": 28, "P1": 29 },
+        "expandedNodes": 26133,
+        "edges": 117558,
+        "terminalStates": 58,
+        "cyclicSccs": 18,
+        "largestCyclicScc": 8,
+        "closedCyclicSccsObserved": 0,
+        "maxDiscoveredDepth": 9,
+        "exampleTwoPlyCycles": [
+          ["B4:CW", "T4:CCW"],
+          ["B2:CCW", "T2:CW"]
+        ]
+      },
+      {
+        "opening": "B3:CW",
+        "evaluation": "strategic",
+        "rootPly": 17,
+        "rootBoardValue": 29,
+        "rootScores": { "P0": 9, "P1": 32 },
+        "expandedNodes": 27483,
+        "edges": 122519,
+        "terminalStates": 157,
+        "cyclicSccs": 69,
+        "largestCyclicScc": 18,
+        "closedCyclicSccsObserved": 0,
+        "maxDiscoveredDepth": 9,
+        "exampleTwoPlyCycles": [
+          ["T4:CCW", "B4:CW"],
+          ["B2:CCW", "T2:CW"],
+          ["T2:CW", "B2:CCW"]
+        ]
+      },
+      {
+        "opening": "B3:CCW",
+        "evaluation": "material",
+        "rootPly": 20,
+        "rootBoardValue": 8,
+        "rootScores": { "P0": 61, "P1": 1 },
+        "expandedNodes": 27355,
+        "edges": 120464,
+        "terminalStates": 192,
+        "cyclicSccs": 32,
+        "largestCyclicScc": 51,
+        "closedCyclicSccsObserved": 0,
+        "maxDiscoveredDepth": 10,
+        "exampleTwoPlyCycles": [
+          ["B2:CCW", "T2:CW"],
+          ["T2:CW", "B2:CCW"],
+          ["T4:CCW", "B4:CW"],
+          ["B4:CW", "T4:CCW"]
+        ]
+      },
+      {
+        "opening": "B3:CCW",
+        "evaluation": "strategic",
+        "rootPly": 21,
+        "rootBoardValue": 11,
+        "rootScores": { "P0": 27, "P1": 32 },
+        "expandedNodes": 26038,
+        "edges": 119529,
+        "terminalStates": 56,
+        "cyclicSccs": 36,
+        "largestCyclicScc": 10,
+        "closedCyclicSccsObserved": 0,
+        "maxDiscoveredDepth": 8,
+        "exampleTwoPlyCycles": [
+          ["T2:CW", "B2:CCW"],
+          ["B2:CCW", "T2:CW"]
+        ]
+      }
+    ],
+    "caveat": "all four graph probes hit the 100000-state cap; zero observed closed cyclic SCCs is not proof that none exist globally"
+  },
+  "v4Conclusion": [
+    "genuine exact repeated strategic states exist under current two-player transitions",
+    "cycles occur even at very low board material",
+    "blindly increasing exact DFS compute is low-value",
+    "repetition/nontermination semantics must be studied explicitly as both an algorithm and competitive-mode question"
+  ],
+  "nextPhase": {
+    "name": "V5 repetition-policy experiment",
+    "candidatePolicies": [
+      "no-adjudication / nontermination remains distinct",
+      "second-occurrence repeated-position draw baseline",
+      "threefold repetition draw candidate",
+      "maximum-ply operational safeguard baseline"
+    ],
+    "measure": [
+      "exact solvability frontier",
+      "B3 subgame values",
+      "repetition trigger rate",
+      "P0/P1 fairness",
+      "draw rate",
+      "game length",
+      "lost-position repetition escape exploitability"
+    ]
+  }
+}

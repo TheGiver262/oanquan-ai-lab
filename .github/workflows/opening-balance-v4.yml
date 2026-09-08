@@ -1,0 +1,93 @@
+name: opening-balance-v4
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/exact-endgame-v4.test.ts tests/endgame-graph-v4.test.ts tests/negamax-pvs-v3.test.ts
+      - run: npm run build
+
+  exact-probe:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B3-CW
+          - B3-CCW
+        family:
+          - material
+          - strategic
+    name: exact-probe (${{ matrix.opening }}, ${{ matrix.family }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Probe deepest recorded V3 PV states
+        shell: bash
+        run: |
+          mkdir -p results/v4
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          npm run benchmark:openings:v4:exact -- \
+            --opening "$OPENING" \
+            --family "${{ matrix.family }}" \
+            --max-board-value 30 \
+            --nodes 2000000 \
+            --time 60000 \
+            --max-probes 3 \
+            | tee "results/v4/exact-${{ matrix.opening }}-${{ matrix.family }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-${{ matrix.opening }}-${{ matrix.family }}
+          path: results/v4/*.json
+
+  graph-probe:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B3-CW
+          - B3-CCW
+        family:
+          - material
+          - strategic
+    name: graph-probe (${{ matrix.opening }}, ${{ matrix.family }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Analyze SCC structure from deepest V3 PV state
+        shell: bash
+        run: |
+          mkdir -p results/v4
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          npm run benchmark:openings:v4:graph -- \
+            --opening "$OPENING" \
+            --family "${{ matrix.family }}" \
+            --nodes 100000 \
+            --time 60000 \
+            | tee "results/v4/graph-${{ matrix.opening }}-${{ matrix.family }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graph-${{ matrix.opening }}-${{ matrix.family }}
+          path: results/v4/*.json
