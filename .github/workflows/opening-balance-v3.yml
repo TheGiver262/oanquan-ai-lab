@@ -1,0 +1,116 @@
+name: opening-balance-v3
+
+on:
+  push:
+    branches:
+      - research/opening-balance-v3
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/negamax-pvs.test.ts tests/negamax-pvs-v3.test.ts
+      - run: npm run build
+
+  deep:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B3-CW
+          - B3-CCW
+        evaluation:
+          - material
+          - strategic
+        nodes:
+          - 10000000
+          - 25000000
+          - 50000000
+    name: deep (${{ matrix.opening }}, ${{ matrix.evaluation }}, ${{ matrix.nodes }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run deep convergence probe
+        shell: bash
+        run: |
+          mkdir -p results/v3
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          npm run benchmark:openings:v3:deep -- \
+            --opening "$OPENING" \
+            --evaluation "${{ matrix.evaluation }}" \
+            --nodes "${{ matrix.nodes }}" \
+            --depth 32 \
+            --time 900000 \
+            --aspiration 250 \
+            | tee "results/v3/deep-${{ matrix.opening }}-${{ matrix.evaluation }}-${{ matrix.nodes }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deep-${{ matrix.opening }}-${{ matrix.evaluation }}-${{ matrix.nodes }}
+          path: results/v3/*.json
+
+  selfplay:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B3-CW
+          - B3-CCW
+        pair:
+          - pvs-material__pvs-strategic
+          - pvs-material__uct-pb
+          - pvs-material__trang-nguyen
+          - pvs-strategic__uct-pb
+          - pvs-strategic__trang-nguyen
+          - uct-pb__trang-nguyen
+    name: selfplay (${{ matrix.opening }}, ${{ matrix.pair }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run paired full-game stress test
+        shell: bash
+        run: |
+          mkdir -p results/v3
+          OPENING="${{ matrix.opening }}"
+          OPENING="${OPENING/-/:}"
+          PAIR="${{ matrix.pair }}"
+          A="${PAIR%%__*}"
+          B="${PAIR##*__}"
+          npm run benchmark:openings:v3:selfplay -- \
+            --opening "$OPENING" \
+            --a "$A" \
+            --b "$B" \
+            --games 4 \
+            --pvs-nodes 80000 \
+            --pvs-depth 12 \
+            --pvs-ms 800 \
+            --simulations 10000 \
+            --mcts-ms 800 \
+            --production-nodes 80000 \
+            --production-ms 800 \
+            --max-moves 160 \
+            --seed 20260908 \
+            | tee "results/v3/selfplay-${{ matrix.opening }}-${{ matrix.pair }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: selfplay-${{ matrix.opening }}-${{ matrix.pair }}
+          path: results/v3/*.json
