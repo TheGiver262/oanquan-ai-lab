@@ -31,8 +31,40 @@ jobs:
       - run: npm test -- --run tests/hybrid-exact-oracle-v6.test.ts tests/wdl-graph-proof-v6.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/exact-policy-solver-v5.test.ts tests/endgame-graph-v4.test.ts
       - run: npm run build
 
-  wdl-coverage:
+  wdl-budget-sweep:
     needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        max_board_value: [8, 12]
+        graph_nodes: [5000, 10000, 20000, 50000]
+    name: wdl-budget (board=${{ matrix.max_board_value }}, nodes=${{ matrix.graph_nodes }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Probe threefold graph-WDL budget coverage
+        shell: bash
+        run: |
+          mkdir -p results/v6-wdl
+          npm run benchmark:v6:wdl-graph -- \
+            --max-board-value "${{ matrix.max_board_value }}" \
+            --graph-nodes "${{ matrix.graph_nodes }}" \
+            --graph-ms 500 \
+            --max-probes-per-line 12 \
+            | tee "results/v6-wdl/wdl-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-wdl-budget-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}
+          path: results/v6-wdl/*.json
+
+  wdl-deep-coverage:
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -40,27 +72,27 @@ jobs:
       matrix:
         max_board_value: [8, 12, 16]
         graph_nodes: [50000, 200000]
-    name: wdl-coverage (board=${{ matrix.max_board_value }}, nodes=${{ matrix.graph_nodes }})
+    name: wdl-deep (board=${{ matrix.max_board_value }}, nodes=${{ matrix.graph_nodes }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm install
-      - name: Probe threefold graph-WDL coverage
+      - name: Probe deeper threefold graph-WDL coverage
         shell: bash
         run: |
-          mkdir -p results/v6-wdl
+          mkdir -p results/v6-wdl-deep
           npm run benchmark:v6:wdl-graph -- \
             --max-board-value "${{ matrix.max_board_value }}" \
             --graph-nodes "${{ matrix.graph_nodes }}" \
             --graph-ms 2000 \
             --max-probes-per-line 12 \
-            | tee "results/v6-wdl/wdl-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}.json"
+            | tee "results/v6-wdl-deep/wdl-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: v6-wdl-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}
-          path: results/v6-wdl/*.json
+          name: v6-wdl-deep-b${{ matrix.max_board_value }}-n${{ matrix.graph_nodes }}
+          path: results/v6-wdl-deep/*.json
 
   legacy-exact-coverage:
     needs: validate
