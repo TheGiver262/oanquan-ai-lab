@@ -1,0 +1,130 @@
+name: v7-strength-and-mode
+
+on:
+  push:
+    branches:
+      - research/hybrid-exact-oracle-v6
+    paths:
+      - "src/research/policy-mcts-v7.ts"
+      - "src/benchmarks/v7-algorithm-strength.ts"
+      - "src/benchmarks/v7-mode-cross-engine.ts"
+      - "tests/policy-mcts-v7.test.ts"
+      - "src/index.ts"
+      - "package.json"
+      - ".github/workflows/v7-strength-and-mode.yml"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/policy-mcts-v7.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts
+      - run: npm run build
+
+  raw-strength:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - a: pvs-strategic
+            b: trang-nguyen
+            opening: none
+            tag: pvs-vs-tn-initial
+          - a: uct-pb
+            b: trang-nguyen
+            opening: none
+            tag: mcts-vs-tn-initial
+          - a: pvs-strategic
+            b: uct-pb
+            opening: none
+            tag: pvs-vs-mcts-initial
+          - a: pvs-strategic
+            b: trang-nguyen
+            opening: B3:CW
+            tag: pvs-vs-tn-b3cw
+          - a: uct-pb
+            b: trang-nguyen
+            opening: B3:CW
+            tag: mcts-vs-tn-b3cw
+          - a: pvs-strategic
+            b: uct-pb
+            opening: B3:CW
+            tag: pvs-vs-mcts-b3cw
+    name: strength-${{ matrix.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run equal-clock strength smoke
+        shell: bash
+        run: |
+          mkdir -p results/v7-strength
+          npm run benchmark:v7:strength -- \
+            --a "${{ matrix.a }}" \
+            --b "${{ matrix.b }}" \
+            --opening "${{ matrix.opening }}" \
+            --games 4 \
+            --ms 400 \
+            --nodes 100000 \
+            --simulations 100000 \
+            --rollout-depth 20 \
+            --pvs-depth 14 \
+            --max-moves 180 \
+            --seed 20260908 \
+            | tee "results/v7-strength/${{ matrix.tag }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-strength-${{ matrix.tag }}
+          path: results/v7-strength/*.json
+
+  mode-cross-engine:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - opening: none
+            tag: initial
+          - opening: B3:CW
+            tag: b3cw
+          - opening: B3:CCW
+            tag: b3ccw
+    name: mode-${{ matrix.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run threefold cross-engine smoke
+        shell: bash
+        run: |
+          mkdir -p results/v7-mode
+          npm run benchmark:v7:mode -- \
+            --opening "${{ matrix.opening }}" \
+            --games 4 \
+            --ms 300 \
+            --pvs-nodes 50000 \
+            --pvs-depth 12 \
+            --mcts-simulations 100000 \
+            --rollout-depth 20 \
+            --max-moves 240 \
+            --seed 20260908 \
+            | tee "results/v7-mode/${{ matrix.tag }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v7-mode-${{ matrix.tag }}
+          path: results/v7-mode/*.json
