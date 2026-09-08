@@ -1,8 +1,5 @@
 name: opening-balance-v2-finalists
 on:
-  push:
-    branches:
-      - research/opening-balance-v2
   workflow_dispatch:
 
 jobs:
