@@ -15,18 +15,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        opening:
-          - B1:CW
-          - B1:CCW
-          - B2:CW
-          - B2:CCW
-          - B3:CW
-          - B3:CCW
-          - B4:CW
-          - B4:CCW
-          - B5:CW
-          - B5:CCW
-    name: opening-${{ matrix.opening }}
+        include:
+          - { opening: "B1:CW", tag: "B1-CW" }
+          - { opening: "B1:CCW", tag: "B1-CCW" }
+          - { opening: "B2:CW", tag: "B2-CW" }
+          - { opening: "B2:CCW", tag: "B2-CCW" }
+          - { opening: "B3:CW", tag: "B3-CW" }
+          - { opening: "B3:CCW", tag: "B3-CCW" }
+          - { opening: "B4:CW", tag: "B4-CW" }
+          - { opening: "B4:CCW", tag: "B4-CCW" }
+          - { opening: "B5:CW", tag: "B5-CW" }
+          - { opening: "B5:CCW", tag: "B5-CCW" }
+    name: opening-${{ matrix.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,8 +37,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p results/v7-opening-scan
-          TAG="${{ matrix.opening }}"
-          TAG="${TAG/:/-}"
           npm run benchmark:v7:fairness -- \
             --opening "${{ matrix.opening }}" \
             --games 8 \
@@ -47,10 +45,10 @@ jobs:
             --rollout-depth 20 \
             --max-moves 240 \
             --seed 20280908 \
-            | tee "results/v7-opening-scan/${TAG}.json"
+            | tee "results/v7-opening-scan/${{ matrix.tag }}.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: v7-opening-scan-${{ matrix.opening }}
+          name: v7-opening-scan-${{ matrix.tag }}
           path: results/v7-opening-scan/*.json
 
   resource-fair-tn:
@@ -59,8 +57,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        opening: [B3:CW, B3:CCW]
-    name: resource-fair-${{ matrix.opening }}
+        include:
+          - { opening: "B3:CW", tag: "B3-CW" }
+          - { opening: "B3:CCW", tag: "B3-CCW" }
+    name: resource-fair-${{ matrix.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,8 +71,6 @@ jobs:
         shell: bash
         run: |
           mkdir -p results/v7-resource-fair
-          TAG="${{ matrix.opening }}"
-          TAG="${TAG/:/-}"
           npm run benchmark:v7:strength -- \
             --a uct-pb \
             --b trang-nguyen \
@@ -85,8 +83,8 @@ jobs:
             --pvs-depth 14 \
             --max-moves 200 \
             --seed 20280908 \
-            | tee "results/v7-resource-fair/${TAG}.json"
+            | tee "results/v7-resource-fair/${{ matrix.tag }}.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: v7-resource-fair-${{ matrix.opening }}
+          name: v7-resource-fair-${{ matrix.tag }}
           path: results/v7-resource-fair/*.json
