@@ -3,6 +3,7 @@ import { createInitialState } from "../src/engine.js";
 import {
   isGraphWdlHistorySafe,
   proveWdlByGraphV6,
+  terminalOutcomeForPerspectiveV6,
 } from "../src/research/wdl-graph-proof-v6.js";
 import { createPolicyState, type PolicyState } from "../src/research/repetition-policy-v5.js";
 
@@ -42,7 +43,7 @@ describe("V6 graph WDL proof", () => {
     expect(result.diagnostics.terminalNodes).toBe(1);
   });
 
-  it("reports terminal loss from the final mover perspective", () => {
+  it("reports terminal loss from the explicit root perspective", () => {
     const game = createInitialState();
     game.status = "finished";
     game.winner = "P1";
@@ -53,5 +54,22 @@ describe("V6 graph WDL proof", () => {
     const result = proveWdlByGraphV6(root, { kind: "repeat-draw", occurrences: 3 });
     expect(result.solved).toBe(true);
     expect(result.outcome).toBe("loss");
+  });
+
+  it("does not infer terminal perspective from terminal currentPlayer", () => {
+    const game = createInitialState();
+    game.status = "finished";
+    game.winner = "P0";
+    game.currentPlayer = "P0";
+    game.scores = { P0: 50, P1: 20 };
+
+    expect(terminalOutcomeForPerspectiveV6(game, "P0")).toBe("win");
+    expect(terminalOutcomeForPerspectiveV6(game, "P1")).toBe("loss");
+
+    // Simulate the other canonical finish-path convention where currentPlayer
+    // can remain/set to the losing side. Perspective must still control WDL.
+    game.currentPlayer = "P1";
+    expect(terminalOutcomeForPerspectiveV6(game, "P0")).toBe("win");
+    expect(terminalOutcomeForPerspectiveV6(game, "P1")).toBe("loss");
   });
 });
