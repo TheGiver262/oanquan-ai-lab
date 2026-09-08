@@ -1,0 +1,54 @@
+name: v9-protocol-holdout
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/hybrid-exact-oracle-v6
+    paths:
+      - ".github/workflows/v9-protocol-holdout.yml"
+
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        protocol:
+          - single-b2ccw
+          - balanced-pool
+          - pie
+        seed:
+          - 20261001
+          - 20261002
+          - 20261003
+          - 20261004
+    name: ${{ matrix.protocol }}-${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run fresh-seed V9 holdout
+        shell: bash
+        run: |
+          mkdir -p results/v9-protocol-holdout
+          npm run benchmark:v8:protocol -- \
+            --protocol "${{ matrix.protocol }}" \
+            --games 20 \
+            --ms 500 \
+            --simulations 140000 \
+            --rollout-depth 20 \
+            --meta-ms 200 \
+            --meta-simulations 80000 \
+            --swap2-candidates 12 \
+            --max-moves 240 \
+            --seed "${{ matrix.seed }}" \
+            | tee "results/v9-protocol-holdout/${{ matrix.protocol }}-${{ matrix.seed }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v9-${{ matrix.protocol }}-${{ matrix.seed }}
+          path: results/v9-protocol-holdout/*.json
