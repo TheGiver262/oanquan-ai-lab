@@ -18,6 +18,7 @@ on:
       - "src/benchmarks/wdl-graph-v6-coverage.ts"
       - "src/benchmarks/hybrid-wdl-v6-ab.ts"
       - "src/benchmarks/tablebase-v6-holdout.ts"
+      - "src/benchmarks/tablebase-v6-selfplay-generalization.ts"
       - "tests/hybrid-exact-oracle-v6.test.ts"
       - "tests/hybrid-wdl-oracle-v6.test.ts"
       - "tests/wdl-graph-proof-v6.test.ts"
@@ -76,6 +77,39 @@ jobs:
         with:
           name: v6-tablebase-${{ matrix.train_opening }}-${{ matrix.placement }}
           path: results/v6-tablebase/*.json
+
+  tablebase-selfplay-generalization:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Train on seeded trajectories and test disjoint seeds
+        shell: bash
+        run: |
+          mkdir -p results/v6-tablebase-selfplay
+          npm run benchmark:v6:tablebase-selfplay -- \
+            --train-games 4 \
+            --test-games 4 \
+            --seed 20260908 \
+            --max-board-value 12 \
+            --max-train-positions 24 \
+            --max-test-positions 24 \
+            --graph-nodes 5000 \
+            --graph-ms 100 \
+            --test-search-nodes 30000 \
+            --test-search-ms 300 \
+            --trajectory-pvs-nodes 5000 \
+            --trajectory-mcts-sims 500 \
+            | tee results/v6-tablebase-selfplay/generalization.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v6-tablebase-selfplay-generalization
+          path: results/v6-tablebase-selfplay/*.json
 
   wdl-ab:
     needs: validate
