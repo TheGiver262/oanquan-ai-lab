@@ -1,8 +1,5 @@
 name: opening-deep-probe
 on:
-  push:
-    branches:
-      - research/opening-pie-balance
   workflow_dispatch:
 
 jobs:
