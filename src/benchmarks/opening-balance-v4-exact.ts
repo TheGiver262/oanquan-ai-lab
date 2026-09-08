@@ -6,6 +6,28 @@ import {
 } from "../research/exact-endgame-v4.js";
 import type { Direction, GameState, PlayerMove } from "../types.js";
 
+const V3_50M_PV: Record<string, string[]> = {
+  "B3:CW:material": [
+    "T1:CW", "B3:CCW", "T2:CW", "B4:CCW", "T3:CW", "B1:CCW", "T3:CW", "B3:CW",
+    "T1:CCW", "B5:CCW", "T3:CW", "B2:CW", "T5:CCW", "B3:CCW", "T5:CW", "B1:CW",
+    "T3:CW", "B2:CCW", "T1:CCW",
+  ],
+  "B3:CW:strategic": [
+    "T1:CW", "B1:CCW", "T3:CW", "B2:CW", "T5:CCW", "B5:CCW", "T3:CCW", "B5:CW",
+    "T4:CW", "B5:CCW", "T1:CCW", "B2:CW", "T3:CW", "B3:CCW", "T4:CW", "B1:CW",
+  ],
+  "B3:CCW:material": [
+    "T1:CW", "B5:CW", "T2:CW", "B1:CCW", "T4:CW", "B4:CW", "T3:CW", "B2:CCW",
+    "T1:CCW", "B5:CW", "T3:CW", "B3:CCW", "T4:CCW", "B4:CCW", "T1:CW", "B5:CW",
+    "T3:CCW", "B4:CCW", "T1:CCW",
+  ],
+  "B3:CCW:strategic": [
+    "T4:CCW", "B1:CW", "T3:CCW", "B5:CW", "T1:CW", "B2:CCW", "T3:CCW", "B4:CW",
+    "T1:CW", "B1:CCW", "T2:CW", "B3:CW", "T4:CW", "B4:CCW", "T3:CW", "B3:CW",
+    "T4:CW", "B4:CCW", "T5:CCW", "B2:CW",
+  ],
+};
+
 const opening = requiredStringArg("--opening");
 const family = requiredStringArg("--family");
 const maxRootBoardValue = intArg("--max-board-value", 30);
@@ -144,25 +166,3 @@ function intArg(name: string, fallback: number): number {
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
   return value;
 }
-
-const V3_50M_PV: Record<string, string[]> = {
-  "B3:CW:material": [
-    "T1:CW", "B3:CCW", "T2:CW", "B4:CCW", "T3:CW", "B1:CCW", "T3:CW", "B3:CW",
-    "T1:CCW", "B5:CCW", "T3:CW", "B2:CW", "T5:CCW", "B3:CCW", "T5:CW", "B1:CW",
-    "T3:CW", "B2:CCW", "T1:CCW",
-  ],
-  "B3:CW:strategic": [
-    "T1:CW", "B1:CCW", "T3:CW", "B2:CW", "T5:CCW", "B5:CCW", "T3:CCW", "B5:CW",
-    "T4:CW", "B5:CCW", "T1:CCW", "B2:CW", "T3:CW", "B3:CCW", "T4:CW", "B1:CW",
-  ],
-  "B3:CCW:material": [
-    "T1:CW", "B5:CW", "T2:CW", "B1:CCW", "T4:CW", "B4:CW", "T3:CW", "B2:CCW",
-    "T1:CCW", "B5:CW", "T3:CW", "B3:CCW", "T4:CCW", "B4:CCW", "T1:CW", "B5:CW",
-    "T3:CCW", "B4:CCW", "T1:CCW",
-  ],
-  "B3:CCW:strategic": [
-    "T4:CCW", "B1:CW", "T3:CCW", "B5:CW", "T1:CW", "B2:CCW", "T3:CCW", "B4:CW",
-    "T1:CW", "B1:CCW", "T2:CW", "B3:CW", "T4:CW", "B4:CCW", "T3:CW", "B3:CW",
-    "T4:CW", "B4:CCW", "T5:CCW", "B2:CW",
-  ],
-};
