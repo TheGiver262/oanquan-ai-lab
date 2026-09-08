@@ -1,4 +1,4 @@
-import { getLegalMoves } from "../engine.js";
+import { createInitialState, getLegalMoves } from "../engine.js";
 import { chooseMctsMove } from "../research/mcts.js";
 import { searchNegamaxPvsV3, type V3EvaluationFamily } from "../research/negamax-pvs-v3.js";
 import { parseClassicOpening } from "../research/opening-pie-analysis.js";
@@ -119,7 +119,7 @@ console.log(JSON.stringify({
 }, null, 2));
 
 function playGame(game: number, p0Engine: EngineId, p1Engine: EngineId, seed: number): GameDetail {
-  const initial = createPolicyState(createInitialStateViaLegalMoves());
+  const initial = createPolicyState(createInitialState());
   const legalOpening = getLegalMoves(initial.game).find(
     (move) => move.player === "P0" && move.pit === opening.pit && move.dir === opening.dir,
   );
@@ -224,14 +224,6 @@ function chooseEngineMove(
   });
   return production ? { player, ...production } : null;
 }
-
-function createInitialStateViaLegalMoves(): GameState {
-  // Local import avoidance keeps this benchmark's state-flow explicit while
-  // preserving the canonical engine initializer through a synchronous module-level helper.
-  return initialStateFactory();
-}
-
-import { createInitialState as initialStateFactory } from "../engine.js";
 
 function maxOccurrence(state: PolicyState): number {
   let max = 0;
