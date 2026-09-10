@@ -12,10 +12,10 @@ function seededRandom(seed: number): () => number {
 }
 
 describe("research MCTS", () => {
-  it("returns a legal move for both UCT variants", () => {
+  it("returns a legal move for UCT, UCT-PB and PUCT-HV", () => {
     const state = createInitialState();
     const legal = new Set(getLegalMoves(state).map((move) => `${move.pit}:${move.dir}`));
-    for (const variant of ["uct", "uct-pb"] as const) {
+    for (const variant of ["uct", "uct-pb", "puct-hv"] as const) {
       const decision = chooseMctsMove(state, {
         variant,
         simulations: 64,
@@ -26,6 +26,29 @@ describe("research MCTS", () => {
       expect(legal.has(`${decision.move?.pit}:${decision.move?.dir}`)).toBe(true);
       expect(decision.diagnostics.simulations).toBe(64);
     }
+  });
+
+  it("normalizes PUCT-HV heuristic policy priors at the root", () => {
+    const decision = chooseMctsMove(createInitialState(), {
+      variant: "puct-hv",
+      simulations: 32,
+      puctExploration: 1.5,
+      policyTemperature: 0.35,
+    });
+
+    expect(decision.rootStats).toHaveLength(10);
+    expect(decision.rootStats.every((entry) => entry.prior > 0 && entry.prior <= 1)).toBe(true);
+    const priorTotal = decision.rootStats.reduce((sum, entry) => sum + entry.prior, 0);
+    expect(priorTotal).toBeCloseTo(1, 10);
+  });
+
+  it("rejects invalid PUCT-HV exploration settings", () => {
+    expect(() => chooseMctsMove(createInitialState(), { variant: "puct-hv", puctExploration: 0 })).toThrow(
+      "puctExploration must be > 0",
+    );
+    expect(() => chooseMctsMove(createInitialState(), { variant: "puct-hv", policyTemperature: 0 })).toThrow(
+      "policyTemperature must be > 0",
+    );
   });
 });
 
