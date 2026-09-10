@@ -1,0 +1,49 @@
+{
+  "phase": "V11 Standard unrestricted",
+  "workflowRunId": 34512415853,
+  "productionSourceCommit": "4984701ce151ee270a6a5ba5fc9211a6ec2b6996",
+  "rules": "canonical Standard; no Pie/Swap; no threefold/repetition adjudication",
+  "engines": {
+    "a": "uct-pb",
+    "b": "trang-nguyen-server-production-reference"
+  },
+  "config": {
+    "games": 100,
+    "seedStart": 20261201,
+    "seedEnd": 20261210,
+    "gamesPerSeed": 10,
+    "timeBudgetMs": 1200,
+    "trangNguyenNodeBudget": 500000,
+    "uctPbSimulationCap": 200000,
+    "rolloutDepth": 20,
+    "maxMoves": 220
+  },
+  "aggregate": {
+    "uctPbWins": 50,
+    "trangNguyenWins": 46,
+    "draws": 4,
+    "unresolved": 0,
+    "uctPbScoreRate": 0.52,
+    "p0Wins": 96,
+    "p1Wins": 0,
+    "p0ScoreRateIncludingHalfDraws": 0.98,
+    "uctPbAsP0": { "games": 50, "wins": 50, "losses": 0, "draws": 0 },
+    "uctPbAsP1": { "games": 50, "wins": 0, "losses": 46, "draws": 4 },
+    "trangNguyenAsP0": { "games": 50, "wins": 46, "losses": 0, "draws": 4 },
+    "trangNguyenAsP1": { "games": 50, "wins": 0, "losses": 50, "draws": 0 },
+    "averageMoves": 29.16,
+    "averageDecisionMs": {
+      "uctPb": 1190.3924557355379,
+      "trangNguyen": 1200.1200524583332
+    },
+    "allDrawsWereNaturalFinalScoreTies": true,
+    "drawFinalScore": "35-35"
+  },
+  "interpretation": {
+    "rawHeadToHead": "Not a useful algorithm-strength discriminator because the seat/opening effect dominates the result.",
+    "seatFinding": "No P1 engine won any of the 100 games; P0 won 96 and 4 games were natural 35-35 draws.",
+    "balanceFinding": "Under the tested strong-AI budget, unrestricted Standard is extremely P0-favored empirically.",
+    "relationshipToForcedOpeningTests": "Does not contradict earlier B3:CW/B3:CCW resource-fair tests where UCT-PB beat Trạng Nguyên 16-0; those tests suppress the dominant unrestricted-opening seat confound.",
+    "claimLimit": "Empirical benchmark evidence only; not a game-theoretic proof or solved result. No live Trạng Nguyên learning snapshot was included."
+  }
+}
