@@ -1,0 +1,120 @@
+{
+  "phase": "V10 Pie + threefold cross-engine tournament",
+  "workflowRunId": 34507347418,
+  "workflowHead": "0a543321cb42b80084731015d126044bca569eac",
+  "productionSourceCommit": "4984701ce151ee270a6a5ba5fc9211a6ec2b6996",
+  "claimLimit": "Production-compatibility cross-engine stress test. Trạng Nguyên is externally adjudicated by threefold but remains repetition-blind inside search; no live learning snapshot was loaded.",
+  "config": {
+    "gamesPerPair": 48,
+    "totalGames": 144,
+    "timeBudgetMs": 1200,
+    "tnNodeCap": 500000,
+    "pvsNodeCap": 500000,
+    "pvsMaxDepth": 16,
+    "uctSimulationCap": 200000,
+    "rolloutDepth": 20,
+    "metaMsPerOpening": 200,
+    "metaSimulationCap": 50000,
+    "threefoldOccurrences": 3
+  },
+  "pairs": [
+    {
+      "engineA": "trang-nguyen",
+      "engineB": "policy-pvs",
+      "games": 48,
+      "engineAWins": 22,
+      "engineBWins": 26,
+      "naturalDraws": 0,
+      "repetitionDraws": 0,
+      "unresolved": 0,
+      "engineAScoreRate": 0.4583333333333333,
+      "engineBScoreRate": 0.5416666666666667,
+      "agentAScoreRate": 0.375,
+      "p0Wins": 26,
+      "p1Wins": 22,
+      "swaps": 24,
+      "averageMoves": 29.125,
+      "runtimeAverageDecisionMs": {
+        "trang-nguyen": 1200.125,
+        "policy-pvs": 1185.593
+      },
+      "openingFrequencies": {
+        "B4:CW": 24,
+        "B2:CCW": 21,
+        "B1:CCW": 2,
+        "B5:CW": 1
+      }
+    },
+    {
+      "engineA": "trang-nguyen",
+      "engineB": "policy-uct-pb",
+      "games": 48,
+      "engineAWins": 13,
+      "engineBWins": 26,
+      "naturalDraws": 8,
+      "repetitionDraws": 1,
+      "unresolved": 0,
+      "engineAScoreRate": 0.3645833333333333,
+      "engineBScoreRate": 0.6354166666666667,
+      "agentAScoreRate": 0.5104166666666666,
+      "p0Wins": 18,
+      "p1Wins": 21,
+      "swaps": 22,
+      "averageMoves": 32.375,
+      "runtimeAverageDecisionMs": {
+        "trang-nguyen": 1195.376,
+        "policy-uct-pb": 1146.314
+      },
+      "openingFrequencies": {
+        "B4:CW": 24,
+        "B2:CCW": 20,
+        "B1:CCW": 3,
+        "B5:CW": 1
+      }
+    },
+    {
+      "engineA": "policy-uct-pb",
+      "engineB": "policy-pvs",
+      "games": 48,
+      "engineAWins": 39,
+      "engineBWins": 1,
+      "naturalDraws": 3,
+      "repetitionDraws": 5,
+      "unresolved": 0,
+      "engineAScoreRate": 0.8958333333333334,
+      "engineBScoreRate": 0.1041666666666666,
+      "agentAScoreRate": 0.4375,
+      "p0Wins": 21,
+      "p1Wins": 19,
+      "swaps": 27,
+      "averageMoves": 36.604166666666664,
+      "runtimeAverageDecisionMs": {
+        "policy-uct-pb": 1169.766,
+        "policy-pvs": 1192.37
+      },
+      "openingFrequencies": {
+        "B2:CCW": 23,
+        "B4:CW": 22,
+        "B1:CCW": 3
+      }
+    }
+  ],
+  "threefold": {
+    "totalRepetitionDraws": 6,
+    "totalGames": 144,
+    "rate": 0.041666666666666664,
+    "notableCases": [
+      "UCT-PB vs PVS: one repetition draw with UCT-PB on P0 at score 9-57, showing repetition can be a strong defensive resource.",
+      "TN vs UCT-PB: the sole repetition draw had TN on P0 at score 26-20; TN is repetition-blind internally."
+    ]
+  },
+  "verdict": {
+    "singleAlgorithmRanking": [
+      "policy-uct-pb",
+      "policy-pvs and frozen trang-nguyen are much closer"
+    ],
+    "longTermHybrid": "UCT-PB core + PVS tactical verification + exact/WDL endgame support",
+    "competitiveModeCandidate": "Pie/Swap + threefold",
+    "simplerModeFallback": "forced B2:CCW + threefold"
+  }
+}
