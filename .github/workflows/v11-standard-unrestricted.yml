@@ -2,11 +2,6 @@ name: v11-standard-unrestricted
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - research/standard-unrestricted-v11
-    paths:
-      - ".github/workflows/v11-standard-unrestricted.yml"
 
 jobs:
   validate:
