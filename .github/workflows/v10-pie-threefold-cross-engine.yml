@@ -1,0 +1,87 @@
+name: v10-pie-threefold-cross-engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/pie-threefold-cross-engine-v10
+    paths:
+      - "src/benchmarks/v10-pie-threefold-cross-engine.ts"
+      - "src/research/policy-mcts-v7.ts"
+      - "src/research/policy-aware-pvs-v5.ts"
+      - "src/research/competitive-protocol-v8.ts"
+      - "src/research/repetition-policy-v5.ts"
+      - "src/reference/server-production-ai.ts"
+      - "package.json"
+      - ".github/workflows/v10-pie-threefold-cross-engine.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/competitive-protocol-v8.test.ts tests/policy-mcts-v7.test.ts tests/policy-aware-pvs-v5.test.ts tests/repetition-policy-v5.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+
+  tournament:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        pair: [tn-uct, tn-pvs, uct-pvs]
+        seed: [20261101, 20261102, 20261103, 20261104]
+    name: ${{ matrix.pair }}-${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Resolve engines
+        shell: bash
+        run: |
+          case "${{ matrix.pair }}" in
+            tn-uct)
+              echo "ENGINE_A=trang-nguyen" >> "$GITHUB_ENV"
+              echo "ENGINE_B=policy-uct-pb" >> "$GITHUB_ENV"
+              ;;
+            tn-pvs)
+              echo "ENGINE_A=trang-nguyen" >> "$GITHUB_ENV"
+              echo "ENGINE_B=policy-pvs" >> "$GITHUB_ENV"
+              ;;
+            uct-pvs)
+              echo "ENGINE_A=policy-uct-pb" >> "$GITHUB_ENV"
+              echo "ENGINE_B=policy-pvs" >> "$GITHUB_ENV"
+              ;;
+          esac
+      - name: Run Pie + threefold cross-engine tournament
+        shell: bash
+        run: |
+          mkdir -p results/v10-pie-threefold
+          npm run benchmark:v10:pie-threefold -- \
+            --a "$ENGINE_A" \
+            --b "$ENGINE_B" \
+            --games 12 \
+            --ms 1200 \
+            --tn-nodes 500000 \
+            --pvs-nodes 500000 \
+            --pvs-depth 16 \
+            --simulations 200000 \
+            --rollout-depth 20 \
+            --meta-ms 200 \
+            --meta-simulations 50000 \
+            --max-moves 220 \
+            --seed "${{ matrix.seed }}" \
+            | tee "results/v10-pie-threefold/${{ matrix.pair }}-${{ matrix.seed }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v10-${{ matrix.pair }}-${{ matrix.seed }}
+          path: results/v10-pie-threefold/*.json
