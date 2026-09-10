@@ -32,7 +32,8 @@
     "benchmark:v7:strength": "tsx src/benchmarks/v7-algorithm-strength.ts",
     "benchmark:v7:mode": "tsx src/benchmarks/v7-mode-cross-engine.ts",
     "benchmark:v7:fairness": "tsx src/benchmarks/v7-mode-seat-fairness.ts",
-    "benchmark:v8:protocol": "tsx src/benchmarks/v8-competitive-protocols.ts"
+    "benchmark:v8:protocol": "tsx src/benchmarks/v8-competitive-protocols.ts",
+    "benchmark:v10:pie-threefold": "tsx src/benchmarks/v10-pie-threefold-cross-engine.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
