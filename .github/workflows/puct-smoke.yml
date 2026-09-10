@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify-and-benchmark:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,47 +16,32 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm test -- --run tests/research-mcts.test.ts tests/server-production-parity.test.ts
-      - name: Run seat-balanced PUCT smoke matrix
-        run: |
-          mkdir -p results/puct-smoke
 
-          npm run benchmark:puct -- \
-            --games 2 \
-            --time-ms 600 \
-            --max-moves 160 \
-            --out results/puct-smoke/puct-hv-vs-uct-pb.json
-
-          npm run benchmark:server -- \
-            --variant puct-hv \
-            --opponent tham-hoa \
-            --production-mode production-max \
-            --games 2 \
-            --mcts-ms 600 \
-            --production-ms 600 \
-            --max-moves 160 \
-            --out results/puct-smoke/puct-hv-vs-tham-hoa.json
-
-          npm run benchmark:server -- \
-            --variant puct-hv \
-            --opponent bang-nhan \
-            --production-mode production-max \
-            --games 2 \
-            --mcts-ms 900 \
-            --production-ms 900 \
-            --max-moves 160 \
-            --out results/puct-smoke/puct-hv-vs-bang-nhan.json
-
-          npm run benchmark:server -- \
-            --variant puct-hv \
-            --opponent trang-nguyen \
-            --production-mode production-max \
-            --games 2 \
-            --mcts-ms 1200 \
-            --production-ms 1200 \
-            --max-moves 160 \
-            --out results/puct-smoke/puct-hv-vs-trang-nguyen.json
-
+  benchmark:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: uct-pb
+            command: npm run benchmark:puct -- --games 2 --time-ms 600 --max-moves 160 --out results/puct-hv-vs-uct-pb.json
+          - id: tham-hoa
+            command: npm run benchmark:server -- --variant puct-hv --opponent tham-hoa --production-mode production-max --games 2 --mcts-ms 600 --production-ms 600 --max-moves 160 --out results/puct-hv-vs-tham-hoa.json
+          - id: bang-nhan
+            command: npm run benchmark:server -- --variant puct-hv --opponent bang-nhan --production-mode production-max --games 2 --mcts-ms 900 --production-ms 900 --max-moves 160 --out results/puct-hv-vs-bang-nhan.json
+          - id: trang-nguyen
+            command: npm run benchmark:server -- --variant puct-hv --opponent trang-nguyen --production-mode production-max --games 2 --mcts-ms 1200 --production-ms 1200 --max-moves 160 --out results/puct-hv-vs-trang-nguyen.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: mkdir -p results
+      - name: Run ${{ matrix.id }} seat-balanced smoke pairing
+        run: ${{ matrix.command }}
       - uses: actions/upload-artifact@v4
         with:
-          name: puct-smoke-results
-          path: results/puct-smoke/*.json
+          name: puct-smoke-${{ matrix.id }}
+          path: results/*.json
