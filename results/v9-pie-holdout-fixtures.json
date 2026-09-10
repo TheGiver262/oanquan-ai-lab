@@ -1,0 +1,646 @@
+{
+  "source": "V9 Pie holdout artifacts, run 34255217730",
+  "semantics": "Replay exact opening and responder seat selected by V9 neutral policy-aware UCT-PB meta-referee; source outcomes are metadata only and are not used by V10 confirmation.",
+  "fixtures": [
+    {
+      "shard": "20261001",
+      "index": 1,
+      "seed": 1802905406,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0.5
+    },
+    {
+      "shard": "20261001",
+      "index": 2,
+      "seed": 1802913325,
+      "opening": "B1:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 3,
+      "seed": 1802921244,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 4,
+      "seed": 1802929163,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 5,
+      "seed": 1802937082,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 6,
+      "seed": 1802945001,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 7,
+      "seed": 1802952920,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 8,
+      "seed": 1802960839,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 9,
+      "seed": 1802968758,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 10,
+      "seed": 1802976677,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 11,
+      "seed": 1802984596,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 12,
+      "seed": 1802992515,
+      "opening": "B2:CCW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 13,
+      "seed": 1803000434,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 14,
+      "seed": 1803008353,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261001",
+      "index": 15,
+      "seed": 1803016272,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 16,
+      "seed": 1803024191,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 17,
+      "seed": 1803032110,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0.5
+    },
+    {
+      "shard": "20261001",
+      "index": 18,
+      "seed": 1803040029,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 19,
+      "seed": 1803047948,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261001",
+      "index": 20,
+      "seed": 1803055867,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 1,
+      "seed": 1802905407,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 2,
+      "seed": 1802913326,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 3,
+      "seed": 1802921245,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 4,
+      "seed": 1802929164,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 5,
+      "seed": 1802937083,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 6,
+      "seed": 1802945002,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0.5
+    },
+    {
+      "shard": "20261002",
+      "index": 7,
+      "seed": 1802952921,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 8,
+      "seed": 1802960840,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 9,
+      "seed": 1802968759,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 10,
+      "seed": 1802976678,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 11,
+      "seed": 1802984597,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 12,
+      "seed": 1802992516,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 13,
+      "seed": 1803000435,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 14,
+      "seed": 1803008354,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 15,
+      "seed": 1803016273,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 16,
+      "seed": 1803024192,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 17,
+      "seed": 1803032111,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261002",
+      "index": 18,
+      "seed": 1803040030,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0.5
+    },
+    {
+      "shard": "20261002",
+      "index": 19,
+      "seed": 1803047949,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261002",
+      "index": 20,
+      "seed": 1803055868,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 1,
+      "seed": 1802905408,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 2,
+      "seed": 1802913327,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 3,
+      "seed": 1802921246,
+      "opening": "B1:CCW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 4,
+      "seed": 1802929165,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 5,
+      "seed": 1802937084,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 6,
+      "seed": 1802945003,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 7,
+      "seed": 1802952922,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 8,
+      "seed": 1802960841,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 9,
+      "seed": 1802968760,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 10,
+      "seed": 1802976679,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 11,
+      "seed": 1802984598,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 12,
+      "seed": 1802992517,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 13,
+      "seed": 1803000436,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 14,
+      "seed": 1803008355,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 15,
+      "seed": 1803016274,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 16,
+      "seed": 1803024193,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 17,
+      "seed": 1803032112,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261003",
+      "index": 18,
+      "seed": 1803040031,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 19,
+      "seed": 1803047950,
+      "opening": "B1:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261003",
+      "index": 20,
+      "seed": 1803055869,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261004",
+      "index": 1,
+      "seed": 1802905409,
+      "opening": "B1:CCW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 2,
+      "seed": 1802913328,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 3,
+      "seed": 1802921247,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 4,
+      "seed": 1802929166,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261004",
+      "index": 5,
+      "seed": 1802937085,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 6,
+      "seed": 1802945004,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 7,
+      "seed": 1802952923,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261004",
+      "index": 8,
+      "seed": 1802960842,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 9,
+      "seed": 1802968761,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 10,
+      "seed": 1802976680,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261004",
+      "index": 11,
+      "seed": 1802984599,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 12,
+      "seed": 1802992518,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 13,
+      "seed": 1803000437,
+      "opening": "B2:CCW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261004",
+      "index": 14,
+      "seed": 1803008356,
+      "opening": "B2:CCW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 15,
+      "seed": 1803016275,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 16,
+      "seed": 1803024194,
+      "opening": "B4:CW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 17,
+      "seed": 1803032113,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 18,
+      "seed": 1803040032,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 1
+    },
+    {
+      "shard": "20261004",
+      "index": 19,
+      "seed": 1803047951,
+      "opening": "B2:CCW",
+      "responderSeat": "P0",
+      "sourceAgentAScore": 0
+    },
+    {
+      "shard": "20261004",
+      "index": 20,
+      "seed": 1803055870,
+      "opening": "B4:CW",
+      "responderSeat": "P1",
+      "sourceAgentAScore": 0
+    }
+  ]
+}
