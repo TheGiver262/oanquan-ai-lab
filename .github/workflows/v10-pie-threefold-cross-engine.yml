@@ -2,18 +2,6 @@ name: v10-pie-threefold-cross-engine
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - research/pie-threefold-cross-engine-v10
-    paths:
-      - "src/benchmarks/v10-pie-threefold-cross-engine.ts"
-      - "src/research/policy-mcts-v7.ts"
-      - "src/research/policy-aware-pvs-v5.ts"
-      - "src/research/competitive-protocol-v8.ts"
-      - "src/research/repetition-policy-v5.ts"
-      - "src/reference/server-production-ai.ts"
-      - "package.json"
-      - ".github/workflows/v10-pie-threefold-cross-engine.yml"
 
 jobs:
   validate:
