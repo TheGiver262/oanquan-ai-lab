@@ -1,34 +1,59 @@
 # Research algorithms for Ô Ăn Quan
 
-This lab compares algorithms that are meaningfully different from the production alpha-beta minimax pipeline.
+This lab compares search families that are meaningfully different from the production alpha-beta/minimax pipeline.
 
-## Round 1 candidates
+## Active candidates
 
 ### 1. MCTS-UCT
 
-Vanilla Monte Carlo Tree Search using UCT selection. This provides a search family with very different failure modes from alpha-beta: it allocates simulations asymmetrically and estimates action values from sampled continuations instead of exhaustively minimizing a fixed-depth heuristic tree.
+Vanilla Monte Carlo Tree Search using UCT selection. It allocates simulations asymmetrically and estimates action values from sampled continuations instead of exhaustively minimizing a fixed-depth heuristic tree.
 
-### 2. MCTS-UCT + progressive bias + heuristic rollout
+### 2. MCTS-UCT + progressive bias + heuristic rollout (`uct-pb`)
 
-Adds domain knowledge only as a decaying bias and rollout policy. Early visits are guided by immediate captures, refill safety, material, mobility and quan pressure; as visits grow, empirical MCTS statistics dominate.
+Adds domain knowledge as a decaying bias and rollout policy. Early visits are guided by immediate captures, refill safety, material and mobility; as visits grow, empirical MCTS statistics dominate.
 
-This is the primary research challenger in the first tournament because the production AI already has a strong heuristic function that can be reused without turning the search back into minimax.
+UCT-PB remains the strongest independent MCTS baseline from the first research round.
 
-## Deferred candidates
+### 3. PUCT with heuristic policy/value (`puct-hv`)
 
-- PVS / NegaScout: useful alpha-beta optimization, but too close to the current production family for the first independent-strength comparison.
-- MTD(f): potentially efficient with a strong transposition table, but still fundamentally minimax/alpha-beta value search.
-- Proof-number / DFPN: highly relevant for proving forced wins and opening/endgame solving; better suited to the later solver phase than a clock-limited general playing bot.
-- PUCT with a learned policy/value network: promising later, but requires training data/model infrastructure and would not be a fair algorithm-only first comparison.
+PUCT replaces the UCT exploration bonus with a policy-prior-weighted term:
+
+```text
+score(child) = Q(child) + c_puct * P(child) * sqrt(N(parent)) / (1 + N(child))
+```
+
+For the first Ô Ăn Quan PUCT experiment there is deliberately **no neural network**:
+
+- `P(child)` is a normalized softmax prior derived from the existing one-ply Ô Ăn Quan heuristic.
+- Leaf value is the same bounded heuristic in `[-1, 1]`, with terminal win/draw/loss mapped to `+1/0/-1`.
+- No Dirichlet root noise is used during evaluation.
+- Initial parameters are `c_puct = 1.5` and policy temperature `0.35`.
+
+This isolates the search-allocation effect of PUCT before introducing training-data or model-quality confounders. A learned policy/value network can be evaluated later as a separate phase if heuristic PUCT shows enough promise.
+
+## Exact / proof-oriented work
+
+- Exact reduced-state endgame search remains active as an oracle/hybrid component.
+- Retrograde/tablebase work remains relevant once reduced-state enumeration becomes practical.
+- Proof-number / DFPN remains a possible specialized solver for forced subgames rather than the default clock-limited playing bot.
+
+## PVS / NegaScout status — retired from active research
+
+PVS / NegaScout is no longer an active candidate and must not be included in future strength tournaments, algorithm scorecards, hybrid-roadmap recommendations or new experiments.
+
+Existing PVS source files and historical result documents may remain in the repository only to reproduce already-recorded research. They are archival evidence, not a candidate for further development.
+
+Reason: PVS is fundamentally an alpha-beta/minimax optimization family and is too close to the production search lineage to add the independent algorithm diversity now required by this lab.
 
 ## Tournament protocol
 
-The research agents are tested against a frozen reference copy of the current 2-player production logic for:
+The active research agents are tested against:
 
-- Thám Hoa
-- Bảng Nhãn
-- Trạng Nguyên
+- UCT-PB as the strongest independent MCTS baseline.
+- The frozen server-production references for Thám Hoa, Bảng Nhãn and Trạng Nguyên.
 
-Every pairing must be seat-balanced: equal games with the research AI as P0 and P1. Randomness is seeded. No boss outcome rewriting is allowed. The canonical standard ruleset and engine are used.
+Every pairing must be seat-balanced: equal games with the research AI as P0 and P1. Randomness is seeded where applicable. No boss outcome rewriting is allowed. The canonical standard ruleset and engine are used.
 
-The first smoke tournament is intentionally small enough for CI. Larger statistically useful runs are performed by raising `--games` after correctness is verified.
+For maximum-strength Thám Hoa/Bảng Nhãn comparisons, use `production-max` so intentional mistake rates do not contaminate the result. Trạng Nguyên comparisons without a matching deployed learning snapshot must retain the `code-parity-no-live-learning-snapshot` caveat.
+
+Small two- or six-game matrices are smoke tests only. Claims about superiority require larger paired-seat runs and uncertainty estimates.
