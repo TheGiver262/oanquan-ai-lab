@@ -1,0 +1,60 @@
+name: v11-standard-unrestricted
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/standard-unrestricted-v11
+    paths:
+      - ".github/workflows/v11-standard-unrestricted.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/research-mcts.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+
+  tournament:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20261201, 20261202, 20261203, 20261204, 20261205, 20261206, 20261207, 20261208, 20261209, 20261210]
+    name: standard-${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run Standard unrestricted UCT-PB vs Trạng Nguyên
+        shell: bash
+        run: |
+          mkdir -p results/v11-standard
+          npm run benchmark:v7:strength -- \
+            --a uct-pb \
+            --b trang-nguyen \
+            --opening none \
+            --games 10 \
+            --ms 1200 \
+            --nodes 500000 \
+            --simulations 200000 \
+            --rollout-depth 20 \
+            --pvs-depth 16 \
+            --max-moves 220 \
+            --seed "${{ matrix.seed }}" \
+            | tee "results/v11-standard/standard-${{ matrix.seed }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v11-standard-${{ matrix.seed }}
+          path: results/v11-standard/*.json
