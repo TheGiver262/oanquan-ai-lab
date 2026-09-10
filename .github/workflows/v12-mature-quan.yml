@@ -1,0 +1,76 @@
+name: v12-mature-quan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mature-quan-v12
+    paths:
+      - "src/benchmarks/v12-mature-quan.ts"
+      - ".github/workflows/v12-mature-quan.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/research-mcts.test.ts tests/negamax-pvs-v3.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+
+  tournament:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        pairing:
+          - uct-selfplay
+          - tn-vs-uct
+          - tn-vs-pvs
+          - uct-vs-pvs
+        seed: [20261211, 20261212, 20261213, 20261214]
+    name: ${{ matrix.pairing }}-${{ matrix.seed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Resolve engines
+        id: engines
+        shell: bash
+        run: |
+          case "${{ matrix.pairing }}" in
+            uct-selfplay) echo "a=uct-pb" >> "$GITHUB_OUTPUT"; echo "b=uct-pb" >> "$GITHUB_OUTPUT" ;;
+            tn-vs-uct) echo "a=trang-nguyen" >> "$GITHUB_OUTPUT"; echo "b=uct-pb" >> "$GITHUB_OUTPUT" ;;
+            tn-vs-pvs) echo "a=trang-nguyen" >> "$GITHUB_OUTPUT"; echo "b=pvs-strategic" >> "$GITHUB_OUTPUT" ;;
+            uct-vs-pvs) echo "a=uct-pb" >> "$GITHUB_OUTPUT"; echo "b=pvs-strategic" >> "$GITHUB_OUTPUT" ;;
+            *) exit 2 ;;
+          esac
+      - name: Run Mature Quan benchmark
+        shell: bash
+        run: |
+          mkdir -p results/v12-mature-quan
+          npx tsx src/benchmarks/v12-mature-quan.ts \
+            --a "${{ steps.engines.outputs.a }}" \
+            --b "${{ steps.engines.outputs.b }}" \
+            --games 12 \
+            --ms 1200 \
+            --nodes 500000 \
+            --simulations 200000 \
+            --rollout-depth 20 \
+            --pvs-depth 16 \
+            --max-moves 220 \
+            --seed "${{ matrix.seed }}" \
+            | tee "results/v12-mature-quan/${{ matrix.pairing }}-${{ matrix.seed }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v12-${{ matrix.pairing }}-${{ matrix.seed }}
+          path: results/v12-mature-quan/*.json
