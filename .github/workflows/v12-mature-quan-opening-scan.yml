@@ -1,0 +1,62 @@
+name: v12-mature-quan-opening-scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/mature-quan-v12
+    paths:
+      - "src/benchmarks/v12-mature-quan-opening-scan.ts"
+      - ".github/workflows/v12-mature-quan-opening-scan.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run build
+
+  scan:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: [B1-CW, B1-CCW, B2-CW, B2-CCW, B3-CW, B3-CCW, B4-CW, B4-CCW, B5-CW, B5-CCW]
+    name: opening-${{ matrix.opening }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Resolve opening
+        id: opening
+        shell: bash
+        run: echo "value=${MATRIX_OPENING/-/:}" >> "$GITHUB_OUTPUT"
+        env:
+          MATRIX_OPENING: ${{ matrix.opening }}
+      - name: Run opening scan
+        shell: bash
+        run: |
+          mkdir -p results/v12-mature-quan-opening-scan
+          npx tsx src/benchmarks/v12-mature-quan-opening-scan.ts \
+            --opening "${{ steps.opening.outputs.value }}" \
+            --games 8 \
+            --ms 500 \
+            --simulations 100000 \
+            --rollout-depth 20 \
+            --max-moves 220 \
+            --seed 20261220 \
+            | tee "results/v12-mature-quan-opening-scan/${{ matrix.opening }}.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v12-opening-${{ matrix.opening }}
+          path: results/v12-mature-quan-opening-scan/*.json
