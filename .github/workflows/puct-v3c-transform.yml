@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   transform:
-    if: "github.event.head_commit.message == 'fix: quote V3C transform workflow condition'"
+    if: "github.event.head_commit.message == 'fix: scope V3C PNSum transform to selectChild'"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +23,18 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           path = Path('src/research/puct-v3c.ts')
           s = path.read_text()
+
+          required = [
+              'PuctV3BOptions', 'PuctV3BDiagnostics', 'PuctV3BMoveStat',
+              'PuctV3BDecision', 'GpnPuctV3B', 'computePnMaxBonuses',
+              'pnMaxBonusValues', 'pnMaxBonus', 'PNMax',
+          ]
+          missing = [token for token in required if token not in s]
+          if missing:
+              raise SystemExit(f'seeded V3B tokens missing: {missing}')
 
           replacements = [
               ('PuctV3BOptions', 'PuctV3COptions'),
@@ -42,105 +52,60 @@ jobs:
           for old, new in replacements:
               s = s.replace(old, new)
 
-          old_stats = '''    let finiteCount = 0;
-              let minFinite = Number.POSITIVE_INFINITY;
-              let maxFinite = Number.NEGATIVE_INFINITY;
-              let hasInfinite = false;
-              for (const child of node.children) {
-                if (hasUseful && !(maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1)) continue;
-                const proofNumber = child.proofBlockedFromParent || pathKeys.has(child.key)
-                  ? Number.POSITIVE_INFINITY
-                  : child.proofNumbers[mover];
-                if (Number.isFinite(proofNumber)) {
-                  finiteCount += 1;
-                  if (proofNumber < minFinite) minFinite = proofNumber;
-                  if (proofNumber > maxFinite) maxFinite = proofNumber;
-                } else {
-                  hasInfinite = true;
-                }
-              }
+          import_anchor = 'import type { GameState, PlayerId, PlayerMove } from "../types.js";\n'
+          if import_anchor not in s:
+              raise SystemExit('import anchor missing')
+          s = s.replace(
+              import_anchor,
+              import_anchor + 'import { computePnSumBonuses } from "./pnsum.js";\n',
+              1,
+          )
 
-              const proofDenominator = finiteCount > 0 ? 1 + maxFinite - minFinite : 1;'''
-          new_stats = '''    let finiteCount = 0;
-              let finiteSum = 0;
-              let minFinite = Number.POSITIVE_INFINITY;
-              let maxFinite = Number.NEGATIVE_INFINITY;
-              let hasInfinite = false;
-              for (const child of node.children) {
-                if (hasUseful && !(maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1)) continue;
-                const proofNumber = child.proofBlockedFromParent || pathKeys.has(child.key)
-                  ? Number.POSITIVE_INFINITY
-                  : child.proofNumbers[mover];
-                if (Number.isFinite(proofNumber)) {
-                  finiteCount += 1;
-                  finiteSum = Math.min(PROOF_NUMBER_CAP, finiteSum + proofNumber);
-                  if (proofNumber < minFinite) minFinite = proofNumber;
-                  if (proofNumber > maxFinite) maxFinite = proofNumber;
-                } else {
-                  hasInfinite = true;
-                }
-              }
+          start = s.index('  private selectChild(')
+          end = s.index('  private updateSolvedOutcome', start)
+          section = s[start:end]
 
-              const proofDenominator = 1 + finiteSum;'''
-          if old_stats not in s:
-              raise SystemExit('selection proof-stat block did not match seeded V3B core')
-          s = s.replace(old_stats, new_stats)
+          changes = [
+              (
+                  '    let finiteCount = 0;\n    let minFinite = Number.POSITIVE_INFINITY;',
+                  '    let finiteCount = 0;\n    let finiteSum = 0;\n    let minFinite = Number.POSITIVE_INFINITY;',
+              ),
+              (
+                  '        finiteCount += 1;\n        if (proofNumber < minFinite) minFinite = proofNumber;',
+                  '        finiteCount += 1;\n        finiteSum = Math.min(PROOF_NUMBER_CAP, finiteSum + proofNumber);\n        if (proofNumber < minFinite) minFinite = proofNumber;',
+              ),
+              (
+                  '    const proofDenominator = finiteCount > 0 ? 1 + maxFinite - minFinite : 1;',
+                  '    const proofDenominator = 1 + finiteSum;',
+              ),
+              (
+                  '? 1 - (proofNumber - minFinite) / proofDenominator',
+                  '? 1 - proofNumber / proofDenominator',
+              ),
+          ]
+          for old, new in changes:
+              if section.count(old) != 1:
+                  raise SystemExit(f'selectChild transform expected exactly one match: {old!r}')
+              section = section.replace(old, new, 1)
+          s = s[:start] + section + s[end:]
 
-          old_bonus = '''      const proofBonus = Number.isFinite(proofNumber)
-                ? 1 - (proofNumber - minFinite) / proofDenominator
-                : 0;'''
-          new_bonus = '''      const proofBonus = Number.isFinite(proofNumber)
-                ? 1 - proofNumber / proofDenominator
-                : 0;'''
-          if old_bonus not in s:
-              raise SystemExit('selection proof-bonus block did not match seeded V3B core')
-          s = s.replace(old_bonus, new_bonus)
+          helper_start = s.index('/**\n * Published PNSum normalization')
+          helper_end = s.index('\nfunction updateProofNumbers', helper_start)
+          helper = '''/**
+           * Published PNSum normalization. `null` represents infinity in the
+           * exported/testable API. The implementation is shared with unit tests.
+           */
+          export { computePnSumBonuses };
 
-          old_fn = '''function pnSumBonusValues(proofNumbers: number[]): number[] {
-            let finiteCount = 0;
-            let minFinite = Number.POSITIVE_INFINITY;
-            let maxFinite = Number.NEGATIVE_INFINITY;
-            for (const value of proofNumbers) {
-              if (!Number.isFinite(value)) continue;
-              finiteCount += 1;
-              if (value < minFinite) minFinite = value;
-              if (value > maxFinite) maxFinite = value;
-            }
-            if (finiteCount === 0) return new Array<number>(proofNumbers.length).fill(0);
-
-            const denominator = 1 + maxFinite - minFinite;
-            const bonuses = new Array<number>(proofNumbers.length);
-            for (let index = 0; index < proofNumbers.length; index += 1) {
-              const value = proofNumbers[index] ?? Number.POSITIVE_INFINITY;
-              bonuses[index] = Number.isFinite(value)
-                ? 1 - (value - minFinite) / denominator
-                : 0;
-            }
-            return bonuses;
-          }'''
-          new_fn = '''function pnSumBonusValues(proofNumbers: number[]): number[] {
-            let finiteCount = 0;
-            let finiteSum = 0;
-            for (const value of proofNumbers) {
-              if (!Number.isFinite(value)) continue;
-              finiteCount += 1;
-              finiteSum = Math.min(PROOF_NUMBER_CAP, finiteSum + value);
-            }
-            if (finiteCount === 0) return new Array<number>(proofNumbers.length).fill(0);
-
-            const denominator = 1 + finiteSum;
-            const bonuses = new Array<number>(proofNumbers.length);
-            for (let index = 0; index < proofNumbers.length; index += 1) {
-              const value = proofNumbers[index] ?? Number.POSITIVE_INFINITY;
-              bonuses[index] = Number.isFinite(value)
-                ? 1 - value / denominator
-                : 0;
-            }
-            return bonuses;
-          }'''
-          if old_fn not in s:
-              raise SystemExit('PNSum helper block did not match transformed seeded core')
-          s = s.replace(old_fn, new_fn)
+          function pnSumBonusValues(proofNumbers: number[]): number[] {
+            return computePnSumBonuses(
+              proofNumbers.map((value) => Number.isFinite(value) ? value : null),
+            );
+          }
+          '''
+          # YAML block indentation is stripped uniformly; normalize the literal.
+          helper = '\n'.join(line[10:] if line.startswith('          ') else line for line in helper.splitlines())
+          s = s[:helper_start] + helper + s[helper_end:]
 
           s = s.replace(
               'Experimental GPN-PUCT V3C research session.',
@@ -154,6 +119,11 @@ jobs:
               'This is an experimental adaptation of GPN-MCTS to PUCT, not the exact UCT\n * selection formula evaluated in the published GPN-MCTS paper.',
               'This is an experimental PNSum adaptation of GPN-MCTS to PUCT, not the exact UCT\n * selection formula evaluated in the published GPN-MCTS paper.',
           )
+
+          forbidden = ['PuctV3B', 'GpnPuctV3B', 'PNMax', 'pnMaxBonus']
+          remaining = [token for token in forbidden if token in s]
+          if remaining:
+              raise SystemExit(f'V3B/PNMax tokens remain after transform: {remaining}')
           path.write_text(s)
           PY
       - run: npm install
