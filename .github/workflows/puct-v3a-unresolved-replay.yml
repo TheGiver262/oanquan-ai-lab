@@ -1,0 +1,56 @@
+name: puct-v3a-unresolved-replay
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3
+    paths:
+      - ".github/workflows/puct-v3a-unresolved-replay.yml"
+  workflow_dispatch:
+
+jobs:
+  replay:
+    strategy:
+      fail-fast: false
+      matrix:
+        matchup: [puct-v3a-vs-puct-v2, puct-v2-mirror]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Configure matchup
+        id: matchup
+        shell: bash
+        run: |
+          if [ "${{ matrix.matchup }}" = "puct-v3a-vs-puct-v2" ]; then
+            echo "research=puct-v3a" >> "$GITHUB_OUTPUT"
+            echo "opponent=puct-v2" >> "$GITHUB_OUTPUT"
+          else
+            echo "research=puct-v2" >> "$GITHUB_OUTPUT"
+            echo "opponent=puct-v2" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Replay B3:CCW reply corpus at 320 ply
+        run: >-
+          npm run benchmark:puct:v3 --
+          --research ${{ steps.matchup.outputs.research }}
+          --opponent ${{ steps.matchup.outputs.opponent }}
+          --openings B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --rollout-depth 20
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --research-ms 600
+          --opponent-ms 600
+          --opponent-nodes 100000
+          --max-moves 320
+          --seed 20260921
+          --out replay-320-${{ matrix.matchup }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: replay-320-${{ matrix.matchup }}
+          path: replay-320-${{ matrix.matchup }}.json
