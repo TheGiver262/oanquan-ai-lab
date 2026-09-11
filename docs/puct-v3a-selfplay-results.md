@@ -2,120 +2,123 @@
 
 ## Evaluation policy
 
-Active V3 evaluation excludes Thám Hoa and Bảng Nhãn.
+Active V3 evaluation excludes Thám Hoa, Bảng Nhãn, and PVS.
 
 The primary comparison is PUCT against PUCT:
 
 1. PUCT V2 vs PUCT V2 is the null-control for seat/corpus/runtime noise.
 2. PUCT V3A vs PUCT V2 is the direct ablation for tree reuse + score-bounded terminal propagation.
-3. UCT-PB and Trạng Nguyên are secondary external checks only.
+3. Future V3B must be compared directly against frozen V3A so proof-number bias is isolated.
+4. UCT-PB and Trạng Nguyên are secondary external checks only; Trạng Nguyên remains `code-parity-no-live-learning-snapshot`.
 
 PUCT V2 is frozen at `c_puct=1.5`, heuristic-policy temperature `0.6`, and no root noise.
 
-Every full-prefix smoke job uses all 16 two-ply positions generated from every legal reply after `B3:CW` and `B3:CCW`. Each position is played twice with engine ownership swapped between P0 and P1.
+The full-prefix corpus contains all 16 two-ply positions generated from every legal reply after `B3:CW` and `B3:CCW`. Each position is played twice with engine ownership swapped between P0 and P1. Raw W/L is secondary because the corpus remains strongly P0-biased; swapped-pair differential is the primary strength metric.
 
-## Full-prefix smoke before reroot optimization
+An unresolved game at the move cap is censored. It is never silently converted to a draw, win, or heuristic result.
 
-Run `34587669991`, 25 ms/decision, 32 games/job.
+## V3A implementation status
 
-### V2 mirror
+V3A adds two features to the frozen PUCT V2 search stack:
 
-- research W-L-D-U: `13-16-3-0`
-- resolved score: `45.3125%`
-- completed swapped pairs: `16`
-- mean pair differential: `-0.1875`
-- favorable / neutral / unfavorable pairs: `0 / 14 / 2`
+- conservative score-bounded terminal/solved-outcome propagation;
+- tree reuse between consecutive turns of the same engine.
 
-### V3A vs V2
+The first optimized reuse experiment used a session-wide strategic-state index. It improved low-budget throughput, but at the 600 ms strength budget the retained tree/index grew to roughly 4 GB and caused Node to OOM. That design is retired and is not the promoted V3A implementation.
 
-- V3A W-L-D-U: `16-15-1-0`
+The current V3A uses bounded two-ply rerooting. When the same engine is called again after its move and the opponent reply, it searches only the retained root -> own move -> opponent move window for the actual strategic state, reroots there, and allows unrelated sibling branches to become collectible. This matches the two-player turn cadence, keeps reuse useful, and bounds retained memory. Dedicated tests cover the two-ply reroot path.
+
+Repeated strategic states remain cycle-safe: repetition is not adjudicated as a draw because the current Ô Ăn Quan rules do not define a repetition result.
+
+## Historical 25 ms smoke
+
+The 25 ms full-prefix smoke runs were useful for regression detection but too noisy for fine ranking. V2-vs-V2 mirror pair differential flipped sign between nominally identical runs (`-0.1875` then `+0.1875`). Therefore these runs are retained only as implementation history, not promotion evidence.
+
+Tree reuse was exercised on more than 92% of V3A decisions in these smoke runs. The hot-path optimization increased simulations per decision from about `460` to `768`, but the later global-index OOM showed that throughput alone was not a sufficient design criterion.
+
+## Memory-bounded 600 ms single-seed check
+
+After switching to bounded two-ply rerooting, the full-strength workflow completed without OOM.
+
+For V3A vs V2 across 32 games / 16 swapped positions at 600 ms per decision:
+
+- V3A W-L-D-U: `14-13-5-0`
 - resolved score: `51.5625%`
 - completed swapped pairs: `16`
 - mean pair differential: `+0.0625`
 - favorable / neutral / unfavorable pairs: `1 / 15 / 0`
-- P0/P1 wins overall: `28 / 3`
 
-V3A search diagnostics:
+This was sufficient to justify a multi-seed gate, not a superiority claim.
 
-- decisions: `403`
-- simulations: `185,487`
-- average simulations/decision: `460.27`
-- average expanded nodes/decision: `1,729.55`
-- milliseconds/simulation: `0.03799`
-- reused decisions: `371 / 403 = 92.06%`
-- inherited root visits: `73,545`
-- cycle cutoffs: `742`, about `0.40%` of simulations
-- solved roots: `139`
+## Multi-seed promotion gate
 
-A 20,000-sample bootstrap over the 16 pair differentials gives a descriptive 95% interval of approximately `[0, +0.1875]`. This is not a superiority proof because the sample is small and the 25 ms time budget itself is noisy.
+Workflow run `34593442375` evaluates four independent seeds: `20260921`, `20260922`, `20260923`, and `20260924`. Every job uses the same 16-position corpus, one swapped pair per position, 600 ms per side, `c_puct=1.5`, temperature `0.6`, and `maxMoves=160`.
 
-## Hot-path diagnosis and optimization
+### V3A vs frozen V2
 
-The first V3A implementation traversed the entire retained subtree every time a real game state became the new root, solely to rebuild the strategic-state index and rewrite depths. At 25 ms this made V3A about `3.7x` more expensive per simulation than the stateless V2 opponent.
+| Seed | W-L-D-U | Resolved score | Completed pairs | Mean pair diff |
+| --- | --- | ---: | ---: | ---: |
+| 20260921 | 14-13-4-1 | 51.61% | 15 | 0.0000 |
+| 20260922 | 15-11-5-1 | 56.45% | 15 | +0.2000 |
+| 20260923 | 15-12-4-1 | 54.84% | 15 | +0.1333 |
+| 20260924 | 15-12-4-1 | 54.84% | 15 | +0.1333 |
 
-Commit `5d2bcc52b4886b88878e352ad11f86fe0ded94e1` removes that O(subtree) reroot traversal.
+Combined direct-ablation result:
 
-The optimized implementation:
+- games: `128`
+- V3A W-L-D-U: `59-48-17-4`
+- resolved games: `124`
+- resolved score: `54.435%`
+- completed swapped pairs: `60`
+- mean pair differential: `+0.1167`
+- pair distribution: `56 x 0`, `1 x +1`, `3 x +2`, `0` negative pairs
+- tree-reuse rate by seed: approximately `93.4-94.1%`
+- average V3A simulations/decision by seed: approximately `25.3k-27.9k`
 
-- keeps a session-wide strategic-state index;
-- treats an indexed equivalent strategic state as a reusable representative from the same fixed engine-player perspective;
-- measures tree depth relative to the current simulation path rather than mutating all retained descendant depths;
-- uses a compact, collision-free serialization of the same rule-relevant strategic fields used by the V4 exact solver;
-- preserves cycle safety and conservative solved-outcome propagation.
+The repeated positive discriminator is `B3:CCW>T4:CCW`, which produced a `+2` pair for V3A in seeds 20260922, 20260923, and 20260924. Seed 20260922 also produced `+1` at `B3:CW>T2:CW`.
 
-CI after this change passes typecheck, the complete test suite, and build.
+The same individual game remains unresolved in every direct seed: `B3:CCW>T2:CW` with V3A as P1, capped at move 160. It is kept out of paired-differential scoring until replayed at a higher move cap.
 
-## Full-prefix smoke after reroot optimization
+A naive bootstrap over all 60 completed pair observations gives a descriptive 95% interval of roughly `[+0.0167, +0.2500]` for the mean pair differential. This must not be interpreted as an independent-sample superiority interval because the same 16 positions are repeated across seeds and therefore observations are correlated.
 
-Run `34588023799`, identical 25 ms/decision protocol.
+### V2 vs V2 null-control
 
-### Optimized V3A vs V2
+Across the four mirror jobs:
 
-- V3A W-L-D-U: `15-14-3-0`
-- resolved score: `51.5625%`
-- completed swapped pairs: `16`
-- mean pair differential: `+0.0625`
-- favorable / neutral / unfavorable pairs: `3 / 12 / 1`
-- pair differentials: `[0,0,0,0,0,1,0,0,0,0,1,0,0,-2,0,1]`
+- completed swapped pairs: `52`
+- every completed pair differential is exactly `0`
+- combined unresolved individual games: `23`
+- per-seed mean pair differential: `0, 0, 0, 0`
 
-Optimized V3A search diagnostics:
+The mirror therefore shows no residual directional pair bias on completed pairs at the 600 ms budget. It also confirms that the corpus contains several long/cyclic candidates that frequently hit `maxMoves=160`.
 
-- decisions: `432`
-- simulations: `331,904`
-- average simulations/decision: `768.30`
-- milliseconds/simulation: `0.02379`
-- reused decisions: `400 / 432 = 92.59%`
-- inherited root visits: `144,737`
-- cycle cutoffs: `1,222`
-- solved roots: `150`
+V3A-vs-V2 has only `4/128` unresolved games compared with `23/128` in the V2 mirror. This is useful behavioral evidence, but it is not itself a direct strength score because the algorithms create different trajectories.
 
-Relative to the pre-optimization V3A smoke:
+## Promotion decision
 
-- simulations/decision increased by about `66.9%`;
-- milliseconds/simulation decreased by about `37.4%`;
-- mean pair differential remained `+0.0625`.
+V3A **passes the V3 baseline promotion / non-regression gate**.
 
-The optimized pair-differential bootstrap interval is wider, approximately `[-0.3125, +0.375]`, because the same net +1 pair point is distributed across three favorable pairs and one `-2` pair. It must therefore be treated as neutral-to-positive smoke evidence, not proof of improvement.
+The evidence supports promoting the current memory-bounded V3A implementation as the frozen baseline for the next proof-number experiment because:
 
-### V2 mirror repeat
+- four direct seeds have non-negative mean paired differential;
+- among 60 completed direct swapped pairs there are four favorable observations and no unfavorable observations;
+- the matched V2-vs-V2 null-control has exactly zero differential on all 52 completed pairs;
+- V3A tree reuse is actually exercised on roughly 93-94% of decisions;
+- the current two-ply reroot implementation completes the 600 ms benchmark without the global-index OOM failure.
 
-The identical V2 mirror in the second 25 ms run produced:
+This is **not** a claim that V3A is statistically proven superior to V2. Only four direct pair observations are discriminating, and three come from the same forced position across different seeds. The defensible conclusion is that V3A is a stable, non-regressing, mildly positive search-stack baseline worth freezing for V3B.
 
-- W-L-D-U: `17-14-1-0`
-- mean pair differential: `+0.1875`
+## Next experiment: V3B
 
-The first identical V2 mirror produced `-0.1875`. The sign flip between two identical-engine runs is direct evidence that a 25 ms wall-clock budget is useful for smoke/regression checks but too noisy for fine strength ranking.
+After unresolved replay is recorded, V3B should add cycle-safe generalized proof-number bias on top of frozen V3A, with no other search-policy changes mixed into the ablation.
 
-## Current conclusion
+Initial plan:
 
-V3A passes the important direct self-play gate:
-
-- no consistent regression against frozen PUCT V2;
-- full-prefix resolved score is `51.5625%` in both pre- and post-optimization runs;
-- mean swapped-pair differential is `+0.0625` in both runs;
-- tree reuse is actually exercised on more than `92%` of V3A decisions;
-- reroot optimization materially increases effective search throughput.
-
-However, superiority over V2 is not statistically established. The next strength evidence must come from the higher-budget paired run, where wall-clock scheduling noise is a much smaller fraction of each decision budget.
-
-GPN/PNMax proof-number bias remains a separate V3B experiment. It should not be mixed into V3A until the optimized V3A baseline is characterized at the higher budget.
+- name the experimental engine `gpn-puct` / V3B, not published `GPN-MCTS`, because selection remains PUCT;
+- start with PNMax;
+- keep `c_puct=1.5` and policy temperature `0.6` fixed;
+- first measure `Cpn=0` to quantify proof-number bookkeeping overhead;
+- then sweep small `Cpn` values such as `0.05`, `0.1`, `0.25`, and `0.5`;
+- compare V3B directly against frozen V3A using the same swapped-prefix methodology;
+- keep any repeated strategic state `UNKNOWN/cycle-unresolved`, never auto-draw;
+- do not add FPU, dynamic cpuct, neural policy/value, Thám Hoa, Bảng Nhãn, or PVS to this ablation.
