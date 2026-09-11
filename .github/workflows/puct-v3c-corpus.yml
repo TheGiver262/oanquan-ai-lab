@@ -1,0 +1,26 @@
+name: puct-v3c-corpus
+
+on:
+  push:
+    branches:
+      - research/pnsum-puct-v3c
+  workflow_dispatch:
+
+jobs:
+  verify-and-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/v3-balanced-midgame-corpus.test.ts tests/puct-v3a.test.ts
+      - run: npm run build
+      - name: Emit corpus audit
+        run: npx tsx src/benchmarks/v3c-corpus-audit.ts --out v3c-balanced-midgame-corpus.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3c-balanced-midgame-corpus
+          path: v3c-balanced-midgame-corpus.json
