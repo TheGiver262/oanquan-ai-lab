@@ -18,6 +18,7 @@ type BeamCandidate = LiveQuanPosition & {
 };
 
 const TARGET_DEPTHS = [4, 5, 6, 7, 8, 9, 10, 11] as const;
+const MAX_TARGET_DEPTH = 11;
 const POSITIONS_PER_DEPTH = 2;
 const MAX_BEAM = 240;
 const MAX_PER_OPENING = 32;
@@ -32,7 +33,7 @@ export function buildLiveQuanBalancedCorpus(): LiveQuanPosition[] {
   const selected: LiveQuanPosition[] = [];
   const selectedKeys = new Set<string>();
 
-  for (let depth = 1; depth <= TARGET_DEPTHS[TARGET_DEPTHS.length - 1]; depth += 1) {
+  for (let depth = 1; depth <= MAX_TARGET_DEPTH; depth += 1) {
     const dedup = new Map<string, BeamCandidate>();
 
     for (const parent of beam) {
