@@ -160,9 +160,6 @@ export class ReusableScoreBoundedPuct {
         cursor.valueSum += reward;
       }
 
-      // Cycle-cut simulations may update statistics, but they must never
-      // create a solved result. The current game rules do not define a
-      // repeated position as draw/win/loss.
       if (!cycleLeaf) {
         for (let index = path.length - 1; index >= 0; index -= 1) {
           const cursor = path[index];
@@ -208,7 +205,6 @@ export class ReusableScoreBoundedPuct {
     if (existing) {
       const reusedVisits = existing.visits;
       existing.parent = null;
-      existing.depth = 0;
       this.root = existing;
       this.rebuildIndex(existing);
       return { root: existing, reused: true, reusedVisits };
@@ -223,12 +219,15 @@ export class ReusableScoreBoundedPuct {
 
   private rebuildIndex(root: Node): void {
     const next = new Map<string, Node>();
-    const stack: Node[] = [root];
+    const seen = new Set<Node>();
+    const stack: Array<{ node: Node; depth: number }> = [{ node: root, depth: 0 }];
     while (stack.length > 0) {
-      const node = stack.pop();
-      if (!node || next.has(node.key)) continue;
-      next.set(node.key, node);
-      for (const child of node.children) stack.push(child);
+      const item = stack.pop();
+      if (!item || seen.has(item.node)) continue;
+      seen.add(item.node);
+      item.node.depth = item.depth;
+      if (!next.has(item.node.key)) next.set(item.node.key, item.node);
+      for (const child of item.node.children) stack.push({ node: child, depth: item.depth + 1 });
     }
     this.index = next;
   }
@@ -249,8 +248,6 @@ export class ReusableScoreBoundedPuct {
         this.enginePlayer as PlayerId,
       );
       node.children.push(child);
-      // Keep the first in-tree representative. Duplicate keys can exist in a
-      // loopy graph; the path-level cycle check remains authoritative.
       if (!this.index.has(child.key)) this.index.set(child.key, child);
     }
     node.expanded = true;
@@ -263,9 +260,6 @@ export class ReusableScoreBoundedPuct {
     const maximizing = node.state.currentPlayer === player;
     const parentVisits = Math.max(1, node.visits);
 
-    // Score bounds: once a child is exactly known to be the worst possible
-    // result for the side to move, do not spend visits there while a child
-    // with a potentially better bound remains.
     const useful = node.children.filter((child) => {
       if (maximizing) return child.solvedOutcome !== -1;
       return child.solvedOutcome !== 1;
@@ -318,11 +312,10 @@ export class ReusableScoreBoundedPuct {
 
   private rankRootChildren(root: Node): Node[] {
     return [...root.children].sort((left, right) => {
-      const leftSolved = left.solvedOutcome ?? -2;
-      const rightSolved = right.solvedOutcome ?? -2;
-      if (leftSolved !== rightSolved && (left.solvedOutcome !== null || right.solvedOutcome !== null)) {
-        if (left.solvedOutcome === 1) return -1;
-        if (right.solvedOutcome === 1) return 1;
+      if (root.solvedOutcome !== null) {
+        const leftSolved = left.solvedOutcome ?? -2;
+        const rightSolved = right.solvedOutcome ?? -2;
+        if (rightSolved !== leftSolved) return rightSolved - leftSolved;
       }
       if (right.visits !== left.visits) return right.visits - left.visits;
       const leftMean = left.visits > 0 ? left.valueSum / left.visits : Number.NEGATIVE_INFINITY;
