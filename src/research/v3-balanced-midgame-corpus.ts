@@ -23,6 +23,7 @@ const WINDOWS = [
   [14, 17],
   [18, 21],
 ] as const;
+const MAX_SCORE_DIFF = 15;
 
 export const BALANCED_MIDGAME_POSITIONS: readonly BalancedMidgamePosition[] = buildBalancedMidgameCorpus();
 
@@ -73,6 +74,7 @@ function buildCandidates(source: MidgameSource): BalancedMidgamePosition[] {
     const metrics = stateMetrics(current);
     if (metrics.nonEmptyP0 < 1 || metrics.nonEmptyP1 < 1) continue;
     if (metrics.legalMoves < 2) continue;
+    if (metrics.scoreDiff > MAX_SCORE_DIFF) continue;
 
     const nonEmptyPitDiff = Math.abs(metrics.nonEmptyP0 - metrics.nonEmptyP1);
     candidates.push({
