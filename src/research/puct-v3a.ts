@@ -1,6 +1,5 @@
 import { applyMove, getLegalMoves, otherPlayer } from "../engine.js";
 import type { GameState, PlayerId, PlayerMove } from "../types.js";
-import { exactStrategicStateKey } from "./exact-endgame-v4.js";
 
 export type PuctV3AOptions = {
   simulations?: number;
@@ -40,13 +39,11 @@ type SolvedOutcome = -1 | 0 | 1 | null;
 type Node = {
   key: string;
   state: GameState;
-  parent: Node | null;
   move: PlayerMove | null;
   children: Node[];
   visits: number;
   valueSum: number;
   prior: number;
-  depth: number;
   expanded: boolean;
   solvedOutcome: SolvedOutcome;
 };
@@ -58,19 +55,28 @@ const DEFAULT_POLICY_TEMPERATURE = 0.6;
 /**
  * PUCT V3A research session.
  *
- * Differences from the stateless PUCT V2 baseline:
- * - reuses a previously explored subtree when the real game reaches it;
- * - propagates exact terminal W/D/L bounds through fully solved children;
- * - never assigns a value to repeated strategic positions: a cycle on the
- *   current simulation path is cut and heuristically evaluated, but remains
- *   unsolved because the current ruleset has no repetition adjudication.
+ * V3A isolates two structural changes from stateless PUCT V2:
+ * - retain/reuse explored states across real game moves;
+ * - conservatively propagate exact terminal W/D/L bounds.
  *
- * Proof-number bias is deliberately NOT included here. V3A is the ablation
- * baseline that isolates tree reuse + score-bounded terminal propagation.
+ * Repeated strategic states are cycle cutoffs only. Current classic rules do
+ * not define repetition adjudication, so a cycle is never marked solved.
+ * Proof-number bias is intentionally deferred to V3B.
  */
 export class ReusableScoreBoundedPuct {
   private enginePlayer: PlayerId | null = null;
   private root: Node | null = null;
+
+  /**
+   * Session-wide strategic-state index.
+   *
+   * Earlier V3A rebuilt this map by traversing the entire retained subtree on
+   * every real move. That made tree reuse itself a major hot path. Strategic
+   * states are immutable for search purposes and all values are stored from a
+   * fixed engine-player perspective, so an existing representative remains
+   * valid after rerooting. Keeping the session index avoids O(subtree) work per
+   * decision and also permits safe transposition reuse within the same game.
+   */
   private index = new Map<string, Node>();
 
   reset(): void {
@@ -148,10 +154,12 @@ export class ReusableScoreBoundedPuct {
         if (node.visits === 0) break;
       }
 
+      maxTreeDepth = Math.max(maxTreeDepth, path.length - 1);
+
       if (!cycleLeaf && node.state.status === "playing" && node.solvedOutcome === null && !node.expanded) {
         const created = this.expandNode(node, policyTemperature);
         expandedNodes += created;
-        maxTreeDepth = Math.max(maxTreeDepth, node.depth + (created > 0 ? 1 : 0));
+        if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, path.length);
       }
 
       const reward = node.solvedOutcome ?? normalizedHeuristic(node.state, this.enginePlayer);
@@ -160,6 +168,8 @@ export class ReusableScoreBoundedPuct {
         cursor.valueSum += reward;
       }
 
+      // A path that hit a repeated strategic position may update empirical
+      // statistics, but it must not create a game-theoretic solved result.
       if (!cycleLeaf) {
         for (let index = path.length - 1; index >= 0; index -= 1) {
           const cursor = path[index];
@@ -200,64 +210,44 @@ export class ReusableScoreBoundedPuct {
   }
 
   private syncRoot(state: GameState): { root: Node; reused: boolean; reusedVisits: number } {
-    const key = exactStrategicStateKey(state);
+    const key = strategicStateKey(state);
     const existing = this.index.get(key);
     if (existing) {
-      const reusedVisits = existing.visits;
-      existing.parent = null;
       this.root = existing;
-      this.rebuildIndex(existing);
-      return { root: existing, reused: true, reusedVisits };
+      return { root: existing, reused: true, reusedVisits: existing.visits };
     }
 
-    const root = makeNode(state, null, null, 1, 0, this.enginePlayer as PlayerId);
+    const root = makeNode(state, null, 1, this.enginePlayer as PlayerId);
     this.root = root;
-    this.index.clear();
     this.index.set(root.key, root);
     return { root, reused: false, reusedVisits: 0 };
-  }
-
-  private rebuildIndex(root: Node): void {
-    const next = new Map<string, Node>();
-    const seen = new Set<Node>();
-    const stack: Array<{ node: Node; depth: number }> = [{ node: root, depth: 0 }];
-    while (stack.length > 0) {
-      const item = stack.pop();
-      if (!item || seen.has(item.node)) continue;
-      seen.add(item.node);
-      item.node.depth = item.depth;
-      if (!next.has(item.node.key)) next.set(item.node.key, item.node);
-      for (const child of item.node.children) stack.push({ node: child, depth: item.depth + 1 });
-    }
-    this.index = next;
   }
 
   private expandNode(node: Node, policyTemperature: number): number {
     if (node.expanded || node.state.status !== "playing") return 0;
     const moves = getLegalMoves(node.state);
     const priors = heuristicPolicyPriors(node.state, moves, this.enginePlayer as PlayerId, policyTemperature);
+
     for (const move of moves) {
       const result = applyMove(node.state, move);
       if (!result.ok) continue;
       const child = makeNode(
         result.state,
-        node,
         move,
         priors.get(moveKey(move)) ?? 0,
-        node.depth + 1,
         this.enginePlayer as PlayerId,
       );
       node.children.push(child);
       if (!this.index.has(child.key)) this.index.set(child.key, child);
     }
+
     node.expanded = true;
     this.updateSolvedOutcome(node);
     return node.children.length;
   }
 
   private selectChild(node: Node, exploration: number): Node {
-    const player = this.enginePlayer as PlayerId;
-    const maximizing = node.state.currentPlayer === player;
+    const maximizing = node.state.currentPlayer === this.enginePlayer;
     const parentVisits = Math.max(1, node.visits);
 
     const useful = node.children.filter((child) => {
@@ -278,6 +268,7 @@ export class ReusableScoreBoundedPuct {
         best = child;
       }
     }
+
     if (!best) throw new Error("PUCT V3A selection reached a node without children");
     return best;
   }
@@ -312,6 +303,8 @@ export class ReusableScoreBoundedPuct {
 
   private rankRootChildren(root: Node): Node[] {
     return [...root.children].sort((left, right) => {
+      // Exact root outcome must dominate visit count. In particular, a solved
+      // draw root may not choose a heavily visited child already proven loss.
       if (root.solvedOutcome !== null) {
         const leftSolved = left.solvedOutcome ?? -2;
         const rightSolved = right.solvedOutcome ?? -2;
@@ -328,25 +321,42 @@ export class ReusableScoreBoundedPuct {
 
 function makeNode(
   state: GameState,
-  parent: Node | null,
   move: PlayerMove | null,
   prior: number,
-  depth: number,
   enginePlayer: PlayerId,
 ): Node {
   return {
-    key: exactStrategicStateKey(state),
+    key: strategicStateKey(state),
     state,
-    parent,
     move,
     children: [],
     visits: 0,
     valueSum: 0,
     prior,
-    depth,
     expanded: false,
     solvedOutcome: state.status === "finished" ? terminalOutcome(state, enginePlayer) : null,
   };
+}
+
+/**
+ * Exact, collision-free serialization of the same rule-relevant fields used
+ * by the V4 exact solver, but without JSON object allocation/stringification.
+ * Pit ids are included so this remains robust to any future board ordering.
+ */
+function strategicStateKey(state: GameState): string {
+  const pits = state.pits
+    .map((pit) => `${pit.id}:${pit.stones}:${pit.quanStones}`)
+    .join(",");
+  return [
+    state.ruleset.canonicalRulesetId,
+    state.currentPlayer,
+    state.scores.P0,
+    state.scores.P1,
+    state.status,
+    state.winner ?? "-",
+    state.moveNumber === 0 ? 1 : 0,
+    pits,
+  ].join("|");
 }
 
 function terminalOutcome(state: GameState, player: PlayerId): -1 | 0 | 1 {
