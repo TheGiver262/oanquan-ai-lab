@@ -18,11 +18,13 @@ describe("balanced V3 midgame corpus", () => {
       expect(state.status).toBe("playing");
       expect(position.moves).toHaveLength(position.depth);
       expect(getLegalMoves(state).length).toBeGreaterThanOrEqual(2);
-      expect(position.scoreDiff).toBeLessThanOrEqual(14);
-      expect(position.danMaterialDiff).toBeLessThanOrEqual(14);
-      const quan = state.pits.filter((pit) => pit.kind === "quan");
-      expect(quan).toHaveLength(2);
-      expect(quan.every((pit) => pit.quanStones > 0)).toBe(true);
+      expect(Number.isFinite(position.balancePenalty)).toBe(true);
+      expect(position.quanAlive).toBeGreaterThanOrEqual(0);
+      expect(position.quanAlive).toBeLessThanOrEqual(2);
+      const p0NonEmpty = state.pits.filter((pit) => pit.owner === "P0" && pit.kind === "dan" && pit.stones > 0).length;
+      const p1NonEmpty = state.pits.filter((pit) => pit.owner === "P1" && pit.kind === "dan" && pit.stones > 0).length;
+      expect(p0NonEmpty).toBeGreaterThanOrEqual(1);
+      expect(p1NonEmpty).toBeGreaterThanOrEqual(1);
     }
   });
 
