@@ -18,6 +18,7 @@
     "benchmark:server": "tsx src/benchmarks/research-vs-server-production.ts",
     "benchmark:puct": "tsx src/benchmarks/puct-vs-uct-pb.ts",
     "benchmark:puct:paired": "tsx src/benchmarks/puct-paired.ts",
+    "benchmark:puct:v3": "tsx src/benchmarks/puct-v3-paired.ts",
     "benchmark:openings:v2": "tsx src/benchmarks/opening-balance-v2.ts",
     "benchmark:openings:v3:deep": "tsx src/benchmarks/opening-balance-v3-deep.ts",
     "benchmark:openings:v3:selfplay": "tsx src/benchmarks/opening-balance-v3-selfplay.ts",
