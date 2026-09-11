@@ -2,19 +2,19 @@
 
 ## Status
 
-PUCT V3B is an experimental branch on top of the frozen V3A baseline.
+**PUCT V3B is not promoted. V3A remains the active baseline.**
 
-V3A remains the control. V3B changes only tree-selection bias; it does not change the heuristic evaluator, policy prior, final root move rule, bounded two-ply reroot strategy, or exact W/D/L propagation.
+V3B is retained as an experimental research result on top of frozen V3A. It changes only tree-selection bias: heuristic evaluation, one-ply policy prior, final root move rule, bounded two-ply rerooting and exact W/D/L propagation remain inherited from V3A.
 
 Active evaluation excludes Thám Hoa, Bảng Nhãn and PVS.
 
-The current candidate for the 600 ms promotion gate is `Cpn=0.1`.
+The 100 ms sweep produced a small positive signal for `Cpn=0.1`, but the 600 ms promotion gate did not reproduce a positive paired advantage. More importantly, one 600 ms replicate exposed a severe cycle-cutoff pathology. The promotion criteria are therefore not met.
 
 ## Motivation
 
-V3A established a stable memory-bounded PUCT baseline with real subtree reuse and conservative solved-outcome propagation. The next isolated question is whether proof-number information can steer limited search budget toward branches that are structurally easier to prove.
+V3A established a memory-bounded PUCT baseline with real subtree reuse and conservative solved-outcome propagation. V3B asks one isolated question: can generalized proof-number information steer limited search budget toward branches that are structurally easier to prove?
 
-The design is inspired by Generalized Proof-Number MCTS (GPN-MCTS), but the published algorithm biases UCT. V3B is therefore explicitly an experimental **GPN-PUCT adaptation**, not a reproduction of the paper's exact selection formula.
+The design is inspired by Generalized Proof-Number MCTS (GPN-MCTS), but the published algorithm biases UCT. V3B is therefore an experimental **GPN-PUCT adaptation**, not a reproduction of the paper's exact selection formula.
 
 ## Per-player proof numbers
 
@@ -28,31 +28,24 @@ For player `p`:
 
 After expansion:
 
-- if `p` is the player to move at the node, the node is an OR node for `p`:
-
-  `pn_p(node) = min pn_p(child)`
-
-- otherwise the node is an AND node for `p`:
-
-  `pn_p(node) = sum pn_p(child)`
+- if `p` is the player to move, the node is an OR node:
+  `pn_p(node) = min pn_p(child)`;
+- otherwise it is an AND node:
+  `pn_p(node) = sum pn_p(child)`.
 
 The sum is bounded at `Number.MAX_SAFE_INTEGER`; any infinite child makes the AND proof number infinite.
 
-Tracking proof numbers per player is important because selection occurs for both sides. At an opponent node, the proof bias must describe what is easy for the opponent to prove, rather than always using the research engine's proof number.
+Proof numbers are tracked per player because search selection occurs for both sides. At an opponent node, proof bias must describe what is easy for the opponent to prove, rather than always using the research engine's proof number.
 
-## PNMax normalization
+## PNMax normalization and PUCT selection
 
-For the current player's proof numbers over candidate children, V3B computes:
+For candidate children of the current player:
 
 `PNMax(i) = 0` when `pn(i) = infinity`.
 
 Otherwise:
 
 `PNMax(i) = 1 - (pn(i) - minFinite) / (1 + maxFinite - minFinite)`
-
-Therefore a smaller finite proof number receives a larger bonus, while impossible/already-disproved wins receive zero.
-
-## PUCT selection
 
 V3A selection is:
 
@@ -62,40 +55,34 @@ V3B adds only:
 
 `score = sign * Q + U_PUCT + Cpn * PNMax`
 
-`Cpn=0` is a required ablation invariant. Under a fixed simulation budget, V3B must make the same selections as V3A. Unit tests compare the chosen move and root visit distribution directly.
-
-The coarse sweep is:
-
-`Cpn ∈ {0, 0.05, 0.1, 0.25, 0.5}`
-
-`0.1` was included because PNMax around that scale performed strongly for Awari in the GPN-MCTS study, but no value was assumed transferable to Ô Ăn Quan.
+`Cpn=0` is an ablation invariant. Under a fixed simulation budget, tests verify that V3B with zero proof bias chooses the same move and produces the same root visit distribution as V3A.
 
 ## Cycle safety
 
 Classic Ô Ăn Quan under the current engine rules has genuine strategic cycles because refill can move score back onto the board.
 
-V3B keeps the V3A rule and strengthens proof handling:
+V3B keeps V3A's empirical-cycle policy and strengthens proof handling:
 
 - a repeated strategic key on the current simulation path is a cycle cutoff;
 - the simulation may update empirical visits and Q statistics;
 - it must not update exact solved outcomes;
 - the cycle-closing child edge is marked `proofBlockedFromParent`;
-- blocked edges are treated as `pn=infinity` when the parent recomputes proof numbers or PNMax selection bias;
-- a blocked edge therefore receives zero PNMax bonus.
+- blocked edges are treated as `pn=infinity` by parent proof recomputation and PNMax normalization;
+- a blocked edge receives zero PNMax bonus.
 
-A repetition is never interpreted as a draw, win, loss, proof or disproof. The edge mask is deliberately conservative: after a later reroot it may withhold some useful proof information, but it cannot convert a strategic loop into false proof evidence.
+A repetition is never interpreted as a draw, win, loss, proof or disproof.
 
-This stronger mask was added after the first coarse sweep showed pathological high-bias behavior: `Cpn=0.25` and `0.5` produced roughly 19.9k and 35.0k research cycle cutoffs respectively because a cycle-closing frontier could still expose `pn=1` to PNMax. Those results are diagnostic only and are not valid promotion evidence.
+This mask was added after an earlier coarse sweep showed that high `Cpn` could accidentally reward cycle-closing frontier nodes. Those pre-mask results are diagnostic only and are not promotion evidence.
 
 ## Tree reuse and memory
 
-V3B inherits the final V3A memory strategy:
+V3B inherits V3A's bounded reuse design:
 
 - no session-wide node map;
-- the persistent engine searches only the old root plus descendants up to two plies when synchronizing the next real game state;
-- once the root is replaced, unreachable siblings have no global references and can be garbage-collected.
+- next real-game synchronization searches only the old root plus descendants up to two plies;
+- once rerooted, unreachable siblings have no global references and can be garbage-collected.
 
-The rejected global-index V3A prototype is not reused because it reached the Node heap limit during 600 ms strength runs.
+The rejected V3A global-index prototype is not reused because it reached the Node heap limit during 600 ms runs.
 
 ## Cycle-safe 100 ms sweep
 
@@ -104,14 +91,12 @@ Run `34597910833`, commit `21499effdd20c470c6c74f4c6eb4e68cc099592e`.
 Protocol:
 
 - frozen V3A opponent;
-- all 16 two-ply positions generated from every legal reply after `B3:CW` and `B3:CCW`;
+- all 16 two-ply positions from every legal reply after `B3:CW` and `B3:CCW`;
 - each position played twice with V3B/V3A ownership swapped between P0/P1;
 - 100 ms per decision;
 - 160-ply cap;
 - no root noise;
 - unresolved games remain censored.
-
-Results:
 
 | Cpn | W-L-D-U | resolved score | completed pairs | mean pair diff | favorable / neutral / unfavorable | research cycle cutoffs | sims/decision | ms/sim |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -121,33 +106,86 @@ Results:
 | 0.25 | 15-13-4-0 | 53.13% | 16 | +0.1250 | 1 / 15 / 0 | 745 | 2,893.3 | 0.01984 |
 | 0.50 | 14-14-4-0 | 50.00% | 16 | 0.0000 | 0 / 16 / 0 | 1,314 | 2,759.1 | 0.02047 |
 
-The only differentiating position in this sweep is `B3:CCW>T4:CCW`:
+The signal was highly concentrated. `B3:CCW>T4:CCW` was the only differentiating position:
 
 - `Cpn=0.05`: pair differential `+1`;
 - `Cpn=0.10`: `+2`;
 - `Cpn=0.25`: `+2`;
 - `Cpn=0.50`: `0`.
 
-This is too concentrated to establish superiority, but it is enough to choose a promotion candidate. `Cpn=0.1` is preferred over `0.25` because both produced the same paired advantage while `0.1` had fewer cycle cutoffs and slightly better throughput.
+`Cpn=0.1` was selected for the 600 ms gate because it matched the best paired result with fewer cycle cutoffs than `0.25`.
 
-`Cpn=0` is an important overhead control. Fixed-simulation tests prove V3B with zero proof bias follows the same selections as V3A, but under wall-clock budgeting V3B still performs fewer simulations because proof-number bookkeeping is extra work. The 600 ms gate therefore includes both `Cpn=0` and `Cpn=0.1` against the same frozen V3A baseline.
+## 600 ms promotion gate
 
-## Evaluation protocol
+Run `34598257320`, commit `92631368562a5e9ec21a24258cdf7f4934998656`.
 
-Primary comparison: **V3B vs frozen V3A**.
+The matrix used four repeated wall-clock runs for both `Cpn=0` and `Cpn=0.1`. Values `20261001..20261004` are **replicate labels, not effective RNG seeds**: root noise is disabled and the current PUCT implementation does not consume this CLI `seed`. Run-to-run variation is therefore caused primarily by wall-clock timing changing the number of simulations completed before a decision deadline.
 
-Every forced position is played twice with engine ownership swapped between P0 and P1. Primary statistic is swapped-pair point differential; raw W/L is secondary because the game corpus has strong first-seat bias.
+Aggregate result:
 
-After choosing `Cpn=0.1`, the promotion gate uses 600 ms per decision and multiple independent runs against V3A. `Cpn=0` is run alongside it as an overhead/control ablation. Unresolved-heavy positions are replayed separately at 320/512 ply instead of being assigned heuristic draws.
+| Cpn | games | W-L-D-U | aggregate resolved score | completed pairs | favorable / neutral / unfavorable | research cycle cutoffs |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 128 | 54-54-17-3 | 50.00% | 62 | 0 / 62 / 0 | 41,993 |
+| 0.10 | 128 | 56-55-16-1 | 50.39% | 63 | 0 / 63 / 0 | 7,246,099 |
 
-## Promotion rule
+The slight raw-score difference for `Cpn=0.1` is not paired evidence: every completed swapped pair for both configurations has differential `0`.
 
-V3B is not promoted merely because raw score exceeds 50% in one run.
+Per-replicate paired result:
 
-Promotion requires:
+- `Cpn=0`: 16, 16, 15 and 15 completed pairs; every completed pair was neutral.
+- `Cpn=0.1`: 16, 16, 16 and 15 completed pairs; every completed pair was neutral.
 
-1. no material negative paired signal versus V3A;
-2. positive paired signal that survives repeated runs better than the zero-bias/control behavior;
-3. acceptable wall-clock overhead from maintaining proof numbers;
-4. no memory regression or cycle-related false solving;
-5. unresolved positions remain censored rather than heuristically adjudicated.
+Therefore the positive 100 ms signal did **not** survive at the intended 600 ms budget.
+
+### Cycle-cutoff regression
+
+The first three `Cpn=0.1` replicates had 4,277, 4,104 and 4,087 research cycle cutoffs. The fourth produced **7,233,631** cycle cutoffs and 11.3 million research simulations.
+
+The cycle mask prevented these repetitions from becoming false proof evidence, so this is not a proof-correctness failure. It is still a serious search-hygiene regression: a legal wall-clock run can spend an extreme amount of search effort inside cycle-heavy trajectories.
+
+That failure alone is sufficient to block promotion under the V3B gate.
+
+## Targeted unresolved replay
+
+Run `34599997122`, commit `7832c034a47f1b76518fc890d3b82b902a27310d`.
+
+A dedicated harness replays only the censored two-ply prefixes, preserving P0/P1 ownership swapping and never heuristic-adjudicating a game at the move cap.
+
+### `Cpn=0.1`, `B3:CW>T2:CW`
+
+- 320-ply replay: both games resolved, V3B 1-1, pair differential `0`.
+- 512-ply replay: identical result, pair differential `0`.
+- P0 won both games; V3B won as P0 and lost as P1.
+
+This censored gate game therefore does not hide a PNMax advantage.
+
+### `Cpn=0`, `B3:CCW>T4:CCW`
+
+- 320-ply replay: both games resolved, V3B lost both, pair differential `-2`; games ended at 242 and 225 plies.
+- 512-ply replay: both games resolved, one win and one loss, pair differential `0`; both ended at 242 plies.
+
+The 320 and 512 runs use the same nominal search configuration, and every game in both runs finished before 320 plies. The different second-game outcome therefore cannot be caused by the move cap. It is another direct example of wall-clock timing sensitivity: different simulation throughput changed a later move choice and sent the game down a different trajectory.
+
+The 512 result is neutral, but the larger lesson is that this wall-clock benchmark should not be interpreted as deterministic game-theoretic evidence.
+
+## Decision
+
+**Reject V3B as a promotion candidate. Keep V3A as the baseline.**
+
+Reasons:
+
+1. The positive `+0.125` paired signal at 100 ms disappeared completely at 600 ms.
+2. Across the 600 ms gate, every completed pair for both `Cpn=0` and `Cpn=0.1` was neutral.
+3. `Cpn=0.1` exhibited a pathological 7.23M-cycle-cutoff replicate even after proof-cycle masking.
+4. Targeted replay did not uncover a hidden positive pair for the censored `Cpn=0.1` position.
+5. Wall-clock repeatability is materially sensitive to runtime throughput, so small raw-score differences must not be promoted as strength improvements.
+
+V3B remains useful as a negative research result and as reusable infrastructure for future proof-number variants. It should not replace V3A in the active strength baseline.
+
+## Follow-up research rule
+
+Do not spend more runs tuning PNMax `Cpn` on the current opening corpus. The current corpus is too seat-biased and the 600 ms gate has already falsified the promotion hypothesis for this PNMax formulation.
+
+If proof-number research continues, the next experiment should be isolated against V3A and should change one structural factor at a time, for example PNSum rather than another PNMax coefficient sweep. It should also use a more discriminating balanced midgame corpus and report fixed-simulation diagnostics alongside wall-clock strength results.
+
+FPU remains a separate future experiment and must not be mixed into the first follow-up proof-number ablation.
