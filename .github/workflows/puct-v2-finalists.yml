@@ -1,0 +1,56 @@
+name: puct-v2-finalists
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/puct-v2-finalists.yml"
+      - "src/benchmarks/puct-paired.ts"
+      - "src/research/mcts.ts"
+      - "package.json"
+  workflow_dispatch:
+
+jobs:
+  finalists:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - id: c1.5-t0.6
+            cpuct: 1.5
+            temperature: 0.6
+          - id: c2.5-t0.35
+            cpuct: 2.5
+            temperature: 0.35
+          - id: c2.5-t0.6
+            cpuct: 2.5
+            temperature: 0.6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: mkdir -p results/puct-v2-finalists
+      - name: Paired finalist vs UCT-PB
+        run: >-
+          npm run benchmark:puct:paired --
+          --opponent uct-pb
+          --openings B3:CW,B3:CCW
+          --pairs 3
+          --simulations 100000
+          --research-ms 600
+          --opponent-ms 600
+          --rollout-depth 20
+          --cpuct ${{ matrix.cpuct }}
+          --policy-temperature ${{ matrix.temperature }}
+          --max-moves 160
+          --seed 20260912
+          --out results/puct-v2-finalists/${{ matrix.id }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puct-v2-finalist-${{ matrix.id }}
+          path: results/puct-v2-finalists/*.json
