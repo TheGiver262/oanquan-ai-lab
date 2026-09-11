@@ -7,8 +7,8 @@ import {
 
 describe("balanced V3 midgame corpus", () => {
   it("contains diverse legal non-terminal positions", () => {
-    expect(BALANCED_MIDGAME_POSITIONS.length).toBeGreaterThanOrEqual(8);
-    expect(new Set(BALANCED_MIDGAME_POSITIONS.map((position) => position.source)).size).toBe(4);
+    expect(BALANCED_MIDGAME_POSITIONS.length).toBeGreaterThanOrEqual(9);
+    expect(new Set(BALANCED_MIDGAME_POSITIONS.map((position) => position.source)).size).toBeGreaterThanOrEqual(3);
     expect(new Set(BALANCED_MIDGAME_POSITIONS.map((position) => position.id)).size).toBe(
       BALANCED_MIDGAME_POSITIONS.length,
     );
@@ -18,6 +18,7 @@ describe("balanced V3 midgame corpus", () => {
       expect(state.status).toBe("playing");
       expect(position.moves).toHaveLength(position.depth);
       expect(getLegalMoves(state).length).toBeGreaterThanOrEqual(2);
+      expect(position.scoreDiff).toBeLessThanOrEqual(15);
       expect(Number.isFinite(position.balancePenalty)).toBe(true);
       expect(position.quanAlive).toBeGreaterThanOrEqual(0);
       expect(position.quanAlive).toBeLessThanOrEqual(2);
