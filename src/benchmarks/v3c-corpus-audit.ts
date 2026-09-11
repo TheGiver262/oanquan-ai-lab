@@ -17,13 +17,14 @@ const rows = BALANCED_MIDGAME_POSITIONS.map((position) => {
     danMaterialDiff: position.danMaterialDiff,
     nonEmptyPitDiff: position.nonEmptyPitDiff,
     legalMoves: position.legalMoves,
+    quanAlive: position.quanAlive,
     balancePenalty: position.balancePenalty,
     prefix: position.moves.map((move) => `${move.pit}:${move.dir}`),
   };
 });
 
 const result = {
-  purpose: "State-balanced Standard-rule midgame corpus derived from frozen 50M-node V3 principal variations.",
+  purpose: "Score-balanced Standard-rule midgame corpus derived from frozen 50M-node V3 principal variations.",
   count: rows.length,
   sourceCounts: Object.fromEntries(
     [...new Set(rows.map((row) => row.source))].map((source) => [
@@ -34,6 +35,11 @@ const result = {
   moverCounts: {
     P0: rows.filter((row) => row.currentPlayer === "P0").length,
     P1: rows.filter((row) => row.currentPlayer === "P1").length,
+  },
+  quanAliveCounts: {
+    two: rows.filter((row) => row.quanAlive === 2).length,
+    one: rows.filter((row) => row.quanAlive === 1).length,
+    zero: rows.filter((row) => row.quanAlive === 0).length,
   },
   depthRange: rows.length > 0 ? [Math.min(...rows.map((row) => row.depth)), Math.max(...rows.map((row) => row.depth))] : null,
   averageScoreDiff: mean(rows.map((row) => row.scoreDiff)),
