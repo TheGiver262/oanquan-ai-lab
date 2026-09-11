@@ -51,12 +51,13 @@ type Node = {
 const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
+const REAL_MOVE_REUSE_PLIES = 2;
 
 /**
  * PUCT V3A research session.
  *
  * V3A isolates two structural changes from stateless PUCT V2:
- * - retain/reuse explored states across real game moves;
+ * - retain/reuse the subtree reached by the actual game;
  * - conservatively propagate exact terminal W/D/L bounds.
  *
  * Repeated strategic states are cycle cutoffs only. Current classic rules do
@@ -67,22 +68,9 @@ export class ReusableScoreBoundedPuct {
   private enginePlayer: PlayerId | null = null;
   private root: Node | null = null;
 
-  /**
-   * Session-wide strategic-state index.
-   *
-   * Earlier V3A rebuilt this map by traversing the entire retained subtree on
-   * every real move. That made tree reuse itself a major hot path. Strategic
-   * states are immutable for search purposes and all values are stored from a
-   * fixed engine-player perspective, so an existing representative remains
-   * valid after rerooting. Keeping the session index avoids O(subtree) work per
-   * decision and also permits safe transposition reuse within the same game.
-   */
-  private index = new Map<string, Node>();
-
   reset(): void {
     this.enginePlayer = null;
     this.root = null;
-    this.index.clear();
   }
 
   chooseMove(state: GameState, options: PuctV3AOptions = {}): PuctV3ADecision {
@@ -106,7 +94,7 @@ export class ReusableScoreBoundedPuct {
           cycleCutoffs: 0,
           reusedRoot: sync.reused,
           reusedRootVisits: sync.reusedVisits,
-          retainedNodes: this.index.size,
+          retainedNodes: countLookupWindowNodes(root),
           solvedRoot: root.solvedOutcome,
         },
         rootStats: [],
@@ -196,7 +184,7 @@ export class ReusableScoreBoundedPuct {
         cycleCutoffs,
         reusedRoot: sync.reused,
         reusedRootVisits: sync.reusedVisits,
-        retainedNodes: this.index.size,
+        retainedNodes: countLookupWindowNodes(root),
         solvedRoot: root.solvedOutcome,
       },
       rootStats: rankedChildren.map((child) => ({
@@ -209,9 +197,19 @@ export class ReusableScoreBoundedPuct {
     };
   }
 
+  /**
+   * The same engine is called once per one of its turns, so the next real root
+   * is normally two plies below the previous root: our played move followed by
+   * the opponent move. Search only that bounded window and then replace
+   * `this.root`. With no parent/global-index references, every sibling branch
+   * outside the chosen subtree becomes collectible immediately.
+   *
+   * This gives tree reuse without the unbounded memory growth of the earlier
+   * session-wide Map, which reached the Node heap limit in 600 ms benchmarks.
+   */
   private syncRoot(state: GameState): { root: Node; reused: boolean; reusedVisits: number } {
     const key = strategicStateKey(state);
-    const existing = this.index.get(key);
+    const existing = this.root ? findBestMatchingDescendant(this.root, key, REAL_MOVE_REUSE_PLIES) : null;
     if (existing) {
       this.root = existing;
       return { root: existing, reused: true, reusedVisits: existing.visits };
@@ -219,7 +217,6 @@ export class ReusableScoreBoundedPuct {
 
     const root = makeNode(state, null, 1, this.enginePlayer as PlayerId);
     this.root = root;
-    this.index.set(root.key, root);
     return { root, reused: false, reusedVisits: 0 };
   }
 
@@ -231,14 +228,14 @@ export class ReusableScoreBoundedPuct {
     for (const move of moves) {
       const result = applyMove(node.state, move);
       if (!result.ok) continue;
-      const child = makeNode(
-        result.state,
-        move,
-        priors.get(moveKey(move)) ?? 0,
-        this.enginePlayer as PlayerId,
+      node.children.push(
+        makeNode(
+          result.state,
+          move,
+          priors.get(moveKey(move)) ?? 0,
+          this.enginePlayer as PlayerId,
+        ),
       );
-      node.children.push(child);
-      if (!this.index.has(child.key)) this.index.set(child.key, child);
     }
 
     node.expanded = true;
@@ -319,6 +316,33 @@ export class ReusableScoreBoundedPuct {
   }
 }
 
+function findBestMatchingDescendant(root: Node, key: string, maxDepth: number): Node | null {
+  let best: Node | null = null;
+  let frontier: Node[] = [root];
+  for (let depth = 0; depth <= maxDepth && frontier.length > 0; depth += 1) {
+    const next: Node[] = [];
+    for (const node of frontier) {
+      if (node.key === key && (!best || node.visits > best.visits)) best = node;
+      if (depth < maxDepth) next.push(...node.children);
+    }
+    frontier = next;
+  }
+  return best;
+}
+
+function countLookupWindowNodes(root: Node): number {
+  let count = 0;
+  let frontier: Node[] = [root];
+  for (let depth = 0; depth <= REAL_MOVE_REUSE_PLIES && frontier.length > 0; depth += 1) {
+    count += frontier.length;
+    if (depth === REAL_MOVE_REUSE_PLIES) break;
+    const next: Node[] = [];
+    for (const node of frontier) next.push(...node.children);
+    frontier = next;
+  }
+  return count;
+}
+
 function makeNode(
   state: GameState,
   move: PlayerMove | null,
@@ -339,9 +363,9 @@ function makeNode(
 }
 
 /**
- * Exact, collision-free serialization of the same rule-relevant fields used
- * by the V4 exact solver, but without JSON object allocation/stringification.
- * Pit ids are included so this remains robust to any future board ordering.
+ * Exact serialization of the same rule-relevant fields used by the V4 exact
+ * solver, but without JSON object allocation/stringification. Pit ids are
+ * included so this remains robust to any future board ordering.
  */
 function strategicStateKey(state: GameState): string {
   const pits = state.pits
