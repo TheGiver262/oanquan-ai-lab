@@ -35,8 +35,8 @@ export function buildBalancedMidgameCorpus(): BalancedMidgamePosition[] {
     const candidates = buildCandidates(source);
     for (const [lo, hi] of WINDOWS) {
       const inWindow = candidates.filter((candidate) => candidate.depth >= lo && candidate.depth <= hi);
-      const pool = inWindow.length > 0 ? inWindow : candidates;
-      const chosen = [...pool]
+      if (inWindow.length === 0) continue;
+      const chosen = [...inWindow]
         .filter((candidate) => !seen.has(positionSignature(replay(candidate.moves))))
         .sort((a, b) => a.balancePenalty - b.balancePenalty || a.depth - b.depth)[0];
       if (!chosen) continue;
