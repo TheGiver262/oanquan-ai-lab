@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { applyMove, createInitialState } from "../engine.js";
+import { applyMove, createInitialState, getLegalMoves } from "../engine.js";
 import { chooseMctsMove, type MctsDecision } from "../research/mcts.js";
 import { parseClassicOpening } from "../research/opening-pie-analysis.js";
 import {
@@ -11,6 +11,11 @@ import type { PlayerId, PlayerMove } from "../types.js";
 
 type OpponentId = "uct-pb" | ProductionTopDifficulty;
 type Score = 0 | 0.5 | 1;
+type ForcedPosition = {
+  label: string;
+  openingKey: string;
+  moves: PlayerMove[];
+};
 type SearchSummary = {
   decisions: number;
   simulations: number;
@@ -23,6 +28,7 @@ type SearchSummary = {
 };
 type GameResult = {
   opening: string;
+  position: string;
   pair: number;
   researchSeat: PlayerId;
   winner: PlayerId | null;
@@ -30,7 +36,7 @@ type GameResult = {
   moves: number;
   researchScore: Score | null;
 };
-type OpeningAggregate = {
+type Aggregate = {
   games: number;
   researchWins: number;
   opponentWins: number;
@@ -45,7 +51,9 @@ type OpeningAggregate = {
 
 const opponent = readOpponent();
 const openings = readOpenings();
-const pairsPerOpening = intArg("--pairs", 1);
+const replyCorpus = hasFlag("--reply-corpus");
+const positions = buildPositions(openings, replyCorpus);
+const pairsPerPosition = intArg("--pairs", 1);
 const simulations = intArg("--simulations", 100_000);
 const rolloutDepth = intArg("--rollout-depth", 20);
 const maxMoves = intArg("--max-moves", 160);
@@ -59,29 +67,36 @@ const opponentTimeBudgetMs = intArg("--opponent-ms", productionProfile?.timeBudg
 const opponentNodeBudget = intArg("--opponent-nodes", productionProfile?.nodeBudget ?? 100_000);
 
 const started = performance.now();
-const aggregate = emptyOpeningAggregate();
-const perOpening: Record<string, OpeningAggregate> = {};
+const aggregate = emptyAggregate();
+const perOpening: Record<string, Aggregate> = {};
+const perPosition: Record<string, Aggregate> = {};
 const details: GameResult[] = [];
 const researchSearch = emptySearchSummary();
 const opponentSearch = opponent === "uct-pb" ? emptySearchSummary() : null;
 
 for (const opening of openings) {
-  const openingKey = `${opening.pit}:${opening.dir}`;
-  const openingAggregate = emptyOpeningAggregate();
-  perOpening[openingKey] = openingAggregate;
+  perOpening[`${opening.pit}:${opening.dir}`] = emptyAggregate();
+}
 
-  for (let pair = 0; pair < pairsPerOpening; pair += 1) {
+for (const position of positions) {
+  const positionAggregate = emptyAggregate();
+  perPosition[position.label] = positionAggregate;
+  const openingAggregate = perOpening[position.openingKey];
+  if (!openingAggregate) throw new Error(`Missing aggregate for ${position.openingKey}`);
+
+  for (let pair = 0; pair < pairsPerPosition; pair += 1) {
     const pairResults: GameResult[] = [];
     for (const researchSeat of ["P0", "P1"] as const) {
       const seed = seedBase
-        + hashString(openingKey)
+        + hashString(position.label)
         + pair * 104_729
         + (researchSeat === "P0" ? 0 : 7_919);
-      const result = playGame(openingKey, pair + 1, researchSeat, seed);
+      const result = playGame(position, pair + 1, researchSeat, seed);
       details.push(result);
       pairResults.push(result);
       recordGame(aggregate, result);
       recordGame(openingAggregate, result);
+      recordGame(positionAggregate, result);
     }
 
     const resolved = pairResults.every((game) => !game.unresolved && game.researchScore !== null);
@@ -90,6 +105,7 @@ for (const opening of openings) {
       const pairDiff = researchPoints - (2 - researchPoints);
       aggregate.pairDiffs.push(pairDiff);
       openingAggregate.pairDiffs.push(pairDiff);
+      positionAggregate.pairDiffs.push(pairDiff);
     }
   }
 }
@@ -97,8 +113,11 @@ for (const opening of openings) {
 const result = {
   matchup: `puct-hv-vs-${opponent}`,
   methodology: {
-    pairedOpenings: "Each forced opening is played twice per pair with engine ownership swapped between P0 and P1.",
-    purpose: "Control first-player/opening bias before attributing results to engine strength.",
+    pairedPositions: "Each forced prefix is played twice per pair with engine ownership swapped between P0 and P1.",
+    positionMode: replyCorpus ? "opening-plus-all-legal-replies" : "opening",
+    purpose: replyCorpus
+      ? "Control seat bias and diversify deterministic evaluation by covering every legal P1 reply after each selected P0 opening."
+      : "Control first-player/opening bias before attributing results to engine strength.",
     puctRootNoise: "disabled",
     pvs: "excluded from active evaluation",
     productionSourceCommit: opponent === "uct-pb" ? null : PRODUCTION_SOURCE_COMMIT,
@@ -111,7 +130,9 @@ const result = {
   },
   opponent,
   openings: openings.map((opening) => `${opening.pit}:${opening.dir}`),
-  pairsPerOpening,
+  positions: positions.map((position) => position.label),
+  positionCount: positions.length,
+  pairsPerPosition,
   games: aggregate.games,
   researchWins: aggregate.researchWins,
   opponentWins: aggregate.opponentWins,
@@ -126,7 +147,10 @@ const result = {
       ? aggregate.pairDiffs.reduce((sum, value) => sum + value, 0) / aggregate.pairDiffs.length
       : null,
   perOpening: Object.fromEntries(
-    Object.entries(perOpening).map(([key, value]) => [key, summarizeOpening(value)]),
+    Object.entries(perOpening).map(([key, value]) => [key, summarizeAggregate(value)]),
+  ),
+  perPosition: Object.fromEntries(
+    Object.entries(perPosition).map(([key, value]) => [key, summarizeAggregate(value)]),
   ),
   searchDiagnostics: {
     puct: summarizeSearch(researchSearch),
@@ -151,12 +175,48 @@ const json = `${JSON.stringify(result, null, 2)}\n`;
 if (outPath) writeFileSync(outPath, json, "utf8");
 console.log(json);
 
-function playGame(openingKey: string, pair: number, researchSeat: PlayerId, seed: number): GameResult {
-  const opening = parseClassicOpening(openingKey);
-  const initial = createInitialState();
-  const forced = applyMove(initial, opening);
-  if (!forced.ok) throw new Error(`Failed forced opening ${openingKey}: ${forced.error}`);
-  let state = forced.state;
+function buildPositions(selectedOpenings: PlayerMove[], includeReplies: boolean): ForcedPosition[] {
+  const built: ForcedPosition[] = [];
+
+  for (const opening of selectedOpenings) {
+    const openingKey = `${opening.pit}:${opening.dir}`;
+    if (!includeReplies) {
+      built.push({ label: openingKey, openingKey, moves: [opening] });
+      continue;
+    }
+
+    const opened = applyMove(createInitialState(), opening);
+    if (!opened.ok) throw new Error(`Failed forced opening ${openingKey}: ${opened.error}`);
+    if (opened.state.status !== "playing") {
+      built.push({ label: openingKey, openingKey, moves: [opening] });
+      continue;
+    }
+
+    const replies = getLegalMoves(opened.state);
+    if (replies.length === 0) {
+      built.push({ label: openingKey, openingKey, moves: [opening] });
+      continue;
+    }
+
+    for (const reply of replies) {
+      built.push({
+        label: `${openingKey}>${reply.pit}:${reply.dir}`,
+        openingKey,
+        moves: [opening, reply],
+      });
+    }
+  }
+
+  return built;
+}
+
+function playGame(position: ForcedPosition, pair: number, researchSeat: PlayerId, seed: number): GameResult {
+  let state = createInitialState();
+  for (const forcedMove of position.moves) {
+    const forced = applyMove(state, forcedMove);
+    if (!forced.ok) throw new Error(`Failed forced prefix ${position.label}: ${forced.error}`);
+    state = forced.state;
+  }
 
   const researchRandom = mulberry32(seed ^ 0x9e3779b9);
   const opponentRandom = mulberry32(seed ^ 0x85ebca6b);
@@ -199,7 +259,8 @@ function playGame(openingKey: string, pair: number, researchSeat: PlayerId, seed
 
     if (!move) {
       return {
-        opening: openingKey,
+        opening: position.openingKey,
+        position: position.label,
         pair,
         researchSeat,
         winner: null,
@@ -215,7 +276,8 @@ function playGame(openingKey: string, pair: number, researchSeat: PlayerId, seed
 
   if (state.status !== "finished") {
     return {
-      opening: openingKey,
+      opening: position.openingKey,
+      position: position.label,
       pair,
       researchSeat,
       winner: null,
@@ -227,7 +289,8 @@ function playGame(openingKey: string, pair: number, researchSeat: PlayerId, seed
 
   const researchScore: Score = state.winner === null ? 0.5 : state.winner === researchSeat ? 1 : 0;
   return {
-    opening: openingKey,
+    opening: position.openingKey,
+    position: position.label,
     pair,
     researchSeat,
     winner: state.winner,
@@ -258,7 +321,7 @@ function recordDecision(summary: SearchSummary, decision: MctsDecision): void {
   summary.effectiveRootBranchingTotal += Math.exp(entropy);
 }
 
-function recordGame(target: OpeningAggregate, game: GameResult): void {
+function recordGame(target: Aggregate, game: GameResult): void {
   target.games += 1;
   if (game.unresolved || game.researchScore === null) {
     target.unresolved += 1;
@@ -275,7 +338,7 @@ function recordGame(target: OpeningAggregate, game: GameResult): void {
   }
 }
 
-function summarizeOpening(value: OpeningAggregate) {
+function summarizeAggregate(value: Aggregate) {
   return {
     games: value.games,
     researchWins: value.researchWins,
@@ -309,7 +372,7 @@ function summarizeSearch(value: SearchSummary) {
   };
 }
 
-function emptyOpeningAggregate(): OpeningAggregate {
+function emptyAggregate(): Aggregate {
   return {
     games: 0,
     researchWins: 0,
@@ -350,6 +413,10 @@ function readOpenings(): PlayerMove[] {
   const values = raw.split(",").map((value) => value.trim()).filter(Boolean);
   if (values.length === 0) throw new Error("--openings must contain at least one opening");
   return values.map(parseClassicOpening);
+}
+
+function hasFlag(name: string): boolean {
+  return process.argv.includes(name);
 }
 
 function stringArg(name: string): string | null {
