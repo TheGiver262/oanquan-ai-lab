@@ -1,0 +1,84 @@
+name: puct-v3a-strength
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3
+    paths:
+      - "src/research/puct-v3a.ts"
+      - "src/benchmarks/puct-v3-paired.ts"
+      - ".github/workflows/puct-v3a-strength.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/puct-v3a.test.ts tests/research-mcts.test.ts tests/exact-endgame-v4.test.ts tests/endgame-graph-v4.test.ts
+      - run: npm run build
+
+  benchmark:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: puct-v2-mirror
+            research: puct-v2
+            opponent: puct-v2
+            research_ms: 600
+            opponent_ms: 600
+            opponent_nodes: 100000
+          - id: puct-v3a-vs-puct-v2
+            research: puct-v3a
+            opponent: puct-v2
+            research_ms: 600
+            opponent_ms: 600
+            opponent_nodes: 100000
+          - id: puct-v3a-vs-uct-pb
+            research: puct-v3a
+            opponent: uct-pb
+            research_ms: 600
+            opponent_ms: 600
+            opponent_nodes: 100000
+          - id: puct-v3a-vs-trang-nguyen
+            research: puct-v3a
+            opponent: trang-nguyen
+            research_ms: 1200
+            opponent_ms: 1200
+            opponent_nodes: 100000
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run paired benchmark
+        run: >-
+          npm run benchmark:puct:v3 --
+          --research ${{ matrix.research }}
+          --opponent ${{ matrix.opponent }}
+          --openings B3:CW,B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --rollout-depth 20
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --research-ms ${{ matrix.research_ms }}
+          --opponent-ms ${{ matrix.opponent_ms }}
+          --opponent-nodes ${{ matrix.opponent_nodes }}
+          --max-moves 160
+          --seed 20260911
+          --out puct-v3a-${{ matrix.id }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puct-v3a-${{ matrix.id }}
+          path: puct-v3a-${{ matrix.id }}.json

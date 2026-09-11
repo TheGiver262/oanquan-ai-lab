@@ -1,0 +1,41 @@
+name: puct-v3a-unresolved-512
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3
+    paths:
+      - ".github/workflows/puct-v3a-unresolved-512.yml"
+  workflow_dispatch:
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Replay B3:CCW reply corpus at 512 ply
+        run: >-
+          npm run benchmark:puct:v3 --
+          --research puct-v3a
+          --opponent puct-v2
+          --openings B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --rollout-depth 20
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --research-ms 600
+          --opponent-ms 600
+          --opponent-nodes 100000
+          --max-moves 512
+          --seed 20260921
+          --out replay-512-puct-v3a-vs-puct-v2.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: replay-512-puct-v3a-vs-puct-v2
+          path: replay-512-puct-v3a-vs-puct-v2.json

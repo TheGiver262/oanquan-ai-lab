@@ -1,0 +1,53 @@
+name: puct-v3a-selfplay-smoke
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3
+    paths:
+      - "src/research/puct-v3a.ts"
+      - "src/benchmarks/puct-v3-paired.ts"
+      - ".github/workflows/puct-v3a-selfplay-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  selfplay:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: puct-v2-mirror
+            research: puct-v2
+            opponent: puct-v2
+          - id: puct-v3a-vs-puct-v2
+            research: puct-v3a
+            opponent: puct-v2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run full-prefix self-play smoke
+        run: >-
+          npm run benchmark:puct:v3 --
+          --research ${{ matrix.research }}
+          --opponent ${{ matrix.opponent }}
+          --openings B3:CW,B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --rollout-depth 20
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --research-ms 25
+          --opponent-ms 25
+          --opponent-nodes 100000
+          --max-moves 160
+          --seed 20260911
+          --out puct-v3a-selfplay-smoke-${{ matrix.id }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puct-v3a-selfplay-smoke-${{ matrix.id }}
+          path: puct-v3a-selfplay-smoke-${{ matrix.id }}.json
