@@ -1,13 +1,6 @@
 name: puct-v2-tuning
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "src/research/mcts.ts"
-      - "src/benchmarks/puct-paired.ts"
-      - "package.json"
-      - ".github/workflows/puct-v2-tuning.yml"
   workflow_dispatch:
 
 jobs:
@@ -56,4 +49,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: puct-v2-c${{ matrix.cpuct }}-t${{ matrix.temperature }}
-          path: results/*.json
+          path: results/puct-v2-c*.json
