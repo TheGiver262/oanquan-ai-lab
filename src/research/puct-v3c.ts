@@ -1,7 +1,8 @@
 import { applyMove, getLegalMoves, otherPlayer } from "../engine.js";
 import type { GameState, PlayerId, PlayerMove } from "../types.js";
+import { computePnSumBonuses } from "./pnsum.js";
 
-export type PuctV3BOptions = {
+export type PuctV3COptions = {
   simulations?: number;
   timeBudgetMs?: number;
   puctExploration?: number;
@@ -9,7 +10,7 @@ export type PuctV3BOptions = {
   proofBias?: number;
 };
 
-export type PuctV3BDiagnostics = {
+export type PuctV3CDiagnostics = {
   simulations: number;
   elapsedMs: number;
   expandedNodes: number;
@@ -24,21 +25,21 @@ export type PuctV3BDiagnostics = {
   proofBiasSelections: number;
 };
 
-export type PuctV3BMoveStat = {
+export type PuctV3CMoveStat = {
   move: PlayerMove;
   visits: number;
   meanValue: number;
   prior: number;
   solvedOutcome: -1 | 0 | 1 | null;
   proofNumberForMover: number | null;
-  pnMaxBonus: number;
+  pnSumBonus: number;
   proofBlockedFromParent: boolean;
 };
 
-export type PuctV3BDecision = {
+export type PuctV3CDecision = {
   move: PlayerMove | null;
-  diagnostics: PuctV3BDiagnostics;
-  rootStats: PuctV3BMoveStat[];
+  diagnostics: PuctV3CDiagnostics;
+  rootStats: PuctV3CMoveStat[];
 };
 
 type SolvedOutcome = -1 | 0 | 1 | null;
@@ -73,13 +74,12 @@ const PROOF_NUMBER_CAP = Number.MAX_SAFE_INTEGER;
 const PLAYERS: readonly PlayerId[] = ["P0", "P1"];
 
 /**
- * Experimental GPN-PUCT V3B research session.
+ * Experimental PNSum-PUCT V3C research session.
  *
- * V3B keeps V3A's memory-bounded two-ply tree reuse, exact W/D/L propagation,
- * and empirical cycle policy, then adds a Generalized Proof-Number inspired
- * PNMax bias to PUCT selection:
+ * V3C keeps V3A's memory-bounded two-ply tree reuse, exact W/D/L propagation,
+ * and empirical cycle policy, then adds a Generalized Proof-Number PNSum bias to PUCT selection:
  *
- *   score = sign * Q + U_PUCT + Cpn * PNMax
+ *   score = sign * Q + U_PUCT + Cpn * PNSum
  *
  * Proof numbers are tracked per player. At a node controlled by player p,
  * pn_p is an OR/min recurrence; at a node controlled by the other player it is
@@ -91,10 +91,10 @@ const PLAYERS: readonly PlayerId[] = ["P0", "P1"];
  * This is conservative across reroots: it may withhold useful proof evidence,
  * but cannot turn repetition into a false proof.
  *
- * This is an experimental adaptation of GPN-MCTS to PUCT, not the exact UCT
+ * This is an experimental PNSum adaptation of GPN-MCTS to PUCT, not the exact UCT
  * selection formula evaluated in the published GPN-MCTS paper.
  */
-export class GpnPuctV3B {
+export class PnSumPuctV3C {
   private enginePlayer: PlayerId | null = null;
   private root: Node | null = null;
 
@@ -103,11 +103,11 @@ export class GpnPuctV3B {
     this.root = null;
   }
 
-  chooseMove(state: GameState, options: PuctV3BOptions = {}): PuctV3BDecision {
+  chooseMove(state: GameState, options: PuctV3COptions = {}): PuctV3CDecision {
     const started = performance.now();
     if (this.enginePlayer === null) this.enginePlayer = state.currentPlayer;
     if (state.currentPlayer !== this.enginePlayer) {
-      throw new Error(`PUCT V3B session belongs to ${this.enginePlayer}, received ${state.currentPlayer}`);
+      throw new Error(`PUCT V3C session belongs to ${this.enginePlayer}, received ${state.currentPlayer}`);
     }
 
     const sync = this.syncRoot(state);
@@ -225,7 +225,7 @@ export class GpnPuctV3B {
         ? Number.POSITIVE_INFINITY
         : child.proofNumbers[root.state.currentPlayer],
     );
-    const rootBonuses = pnMaxBonusValues(rootProofValues);
+    const rootBonuses = pnSumBonusValues(rootProofValues);
     return {
       move: rankedChildren[0]?.move ?? legalMoves[0] ?? null,
       diagnostics: {
@@ -249,7 +249,7 @@ export class GpnPuctV3B {
         prior: child.prior,
         solvedOutcome: child.solvedOutcome,
         proofNumberForMover: serializableProofNumber(rootProofValues[index] ?? Number.POSITIVE_INFINITY),
-        pnMaxBonus: rootBonuses[index] ?? 0,
+        pnSumBonus: rootBonuses[index] ?? 0,
         proofBlockedFromParent: child.proofBlockedFromParent,
       })),
     };
@@ -311,6 +311,7 @@ export class GpnPuctV3B {
     }
 
     let finiteCount = 0;
+    let finiteSum = 0;
     let minFinite = Number.POSITIVE_INFINITY;
     let maxFinite = Number.NEGATIVE_INFINITY;
     let hasInfinite = false;
@@ -321,6 +322,7 @@ export class GpnPuctV3B {
         : child.proofNumbers[mover];
       if (Number.isFinite(proofNumber)) {
         finiteCount += 1;
+        finiteSum = Math.min(PROOF_NUMBER_CAP, finiteSum + proofNumber);
         if (proofNumber < minFinite) minFinite = proofNumber;
         if (proofNumber > maxFinite) maxFinite = proofNumber;
       } else {
@@ -328,7 +330,7 @@ export class GpnPuctV3B {
       }
     }
 
-    const proofDenominator = finiteCount > 0 ? 1 + maxFinite - minFinite : 1;
+    const proofDenominator = 1 + finiteSum;
     const proofBiasActive = proofBias > 0
       && finiteCount > 0
       && (hasInfinite || maxFinite > minFinite);
@@ -344,7 +346,7 @@ export class GpnPuctV3B {
         ? Number.POSITIVE_INFINITY
         : child.proofNumbers[mover];
       const proofBonus = Number.isFinite(proofNumber)
-        ? 1 - (proofNumber - minFinite) / proofDenominator
+        ? 1 - proofNumber / proofDenominator
         : 0;
       const score = sign * mean + explorationTerm + proofBias * proofBonus;
       if (score > bestScore) {
@@ -353,7 +355,7 @@ export class GpnPuctV3B {
       }
     }
 
-    if (!best) throw new Error("PUCT V3B selection reached a node without children");
+    if (!best) throw new Error("PUCT V3C selection reached a node without children");
     return { child: best, proofBiasActive };
   }
 
@@ -402,41 +404,16 @@ export class GpnPuctV3B {
 }
 
 /**
- * Published PNMax normalization adapted to an array representation. `null`
- * represents infinity in the exported/testable API.
+ * Published PNSum normalization. `null` represents infinity in the
+ * exported/testable API. The implementation is shared with unit tests.
  */
-export function computePnMaxBonuses(proofNumbers: Array<number | null>): number[] {
-  const numeric = new Array<number>(proofNumbers.length);
-  for (let index = 0; index < proofNumbers.length; index += 1) {
-    const value = proofNumbers[index];
-    numeric[index] = value == null ? Number.POSITIVE_INFINITY : value;
-  }
-  return pnMaxBonusValues(numeric);
+export { computePnSumBonuses };
+
+function pnSumBonusValues(proofNumbers: number[]): number[] {
+  return computePnSumBonuses(
+    proofNumbers.map((value) => Number.isFinite(value) ? value : null),
+  );
 }
-
-function pnMaxBonusValues(proofNumbers: number[]): number[] {
-  let finiteCount = 0;
-  let minFinite = Number.POSITIVE_INFINITY;
-  let maxFinite = Number.NEGATIVE_INFINITY;
-  for (const value of proofNumbers) {
-    if (!Number.isFinite(value)) continue;
-    finiteCount += 1;
-    if (value < minFinite) minFinite = value;
-    if (value > maxFinite) maxFinite = value;
-  }
-  if (finiteCount === 0) return new Array<number>(proofNumbers.length).fill(0);
-
-  const denominator = 1 + maxFinite - minFinite;
-  const bonuses = new Array<number>(proofNumbers.length);
-  for (let index = 0; index < proofNumbers.length; index += 1) {
-    const value = proofNumbers[index] ?? Number.POSITIVE_INFINITY;
-    bonuses[index] = Number.isFinite(value)
-      ? 1 - (value - minFinite) / denominator
-      : 0;
-  }
-  return bonuses;
-}
-
 function updateProofNumbers(node: Node): void {
   if (node.state.status === "finished") {
     node.proofNumbers = terminalProofNumbers(node.state);
