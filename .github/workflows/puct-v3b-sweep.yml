@@ -1,0 +1,59 @@
+name: puct-v3b-sweep
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3b
+    paths:
+      - ".github/workflows/puct-v3b-sweep.yml"
+      - "src/research/puct-v3b.ts"
+      - "src/research/puct-v3a.ts"
+      - "src/benchmarks/puct-v3b-paired.ts"
+      - "tests/puct-v3b.test.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/puct-v3b.test.ts tests/puct-v3a.test.ts tests/exact-endgame-v4.test.ts tests/endgame-graph-v4.test.ts
+      - run: npm run build
+
+  sweep:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        cpn: [0, 0.05, 0.1, 0.25, 0.5]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run paired V3B versus frozen V3A
+        run: >-
+          npm run benchmark:puct:v3b --
+          --openings B3:CW,B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --cpn ${{ matrix.cpn }}
+          --research-ms 100
+          --opponent-ms 100
+          --max-moves 160
+          --seed 20260931
+          --out v3b-sweep-cpn-${{ matrix.cpn }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3b-sweep-cpn-${{ matrix.cpn }}
+          path: v3b-sweep-cpn-${{ matrix.cpn }}.json
