@@ -1,0 +1,170 @@
+name: puct-v3c-transform
+
+on:
+  push:
+    branches:
+      - research/pnsum-puct-v3c
+
+permissions:
+  contents: write
+
+jobs:
+  transform:
+    if: github.event.head_commit.message == 'ci: transform seeded V3C core to PNSum'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/pnsum-puct-v3c
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Convert PNMax core to PNSum V3C
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/research/puct-v3c.ts')
+          s = path.read_text()
+
+          replacements = [
+              ('PuctV3BOptions', 'PuctV3COptions'),
+              ('PuctV3BDiagnostics', 'PuctV3CDiagnostics'),
+              ('PuctV3BMoveStat', 'PuctV3CMoveStat'),
+              ('PuctV3BDecision', 'PuctV3CDecision'),
+              ('GpnPuctV3B', 'PnSumPuctV3C'),
+              ('PUCT V3B', 'PUCT V3C'),
+              ('V3B keeps V3A', 'V3C keeps V3A'),
+              ('PNMax', 'PNSum'),
+              ('pnMaxBonus', 'pnSumBonus'),
+              ('computePnMaxBonuses', 'computePnSumBonuses'),
+              ('pnMaxBonusValues', 'pnSumBonusValues'),
+          ]
+          for old, new in replacements:
+              s = s.replace(old, new)
+
+          old_stats = '''    let finiteCount = 0;
+              let minFinite = Number.POSITIVE_INFINITY;
+              let maxFinite = Number.NEGATIVE_INFINITY;
+              let hasInfinite = false;
+              for (const child of node.children) {
+                if (hasUseful && !(maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1)) continue;
+                const proofNumber = child.proofBlockedFromParent || pathKeys.has(child.key)
+                  ? Number.POSITIVE_INFINITY
+                  : child.proofNumbers[mover];
+                if (Number.isFinite(proofNumber)) {
+                  finiteCount += 1;
+                  if (proofNumber < minFinite) minFinite = proofNumber;
+                  if (proofNumber > maxFinite) maxFinite = proofNumber;
+                } else {
+                  hasInfinite = true;
+                }
+              }
+
+              const proofDenominator = finiteCount > 0 ? 1 + maxFinite - minFinite : 1;'''
+          new_stats = '''    let finiteCount = 0;
+              let finiteSum = 0;
+              let minFinite = Number.POSITIVE_INFINITY;
+              let maxFinite = Number.NEGATIVE_INFINITY;
+              let hasInfinite = false;
+              for (const child of node.children) {
+                if (hasUseful && !(maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1)) continue;
+                const proofNumber = child.proofBlockedFromParent || pathKeys.has(child.key)
+                  ? Number.POSITIVE_INFINITY
+                  : child.proofNumbers[mover];
+                if (Number.isFinite(proofNumber)) {
+                  finiteCount += 1;
+                  finiteSum = Math.min(PROOF_NUMBER_CAP, finiteSum + proofNumber);
+                  if (proofNumber < minFinite) minFinite = proofNumber;
+                  if (proofNumber > maxFinite) maxFinite = proofNumber;
+                } else {
+                  hasInfinite = true;
+                }
+              }
+
+              const proofDenominator = 1 + finiteSum;'''
+          if old_stats not in s:
+              raise SystemExit('selection proof-stat block did not match seeded V3B core')
+          s = s.replace(old_stats, new_stats)
+
+          old_bonus = '''      const proofBonus = Number.isFinite(proofNumber)
+                ? 1 - (proofNumber - minFinite) / proofDenominator
+                : 0;'''
+          new_bonus = '''      const proofBonus = Number.isFinite(proofNumber)
+                ? 1 - proofNumber / proofDenominator
+                : 0;'''
+          if old_bonus not in s:
+              raise SystemExit('selection proof-bonus block did not match seeded V3B core')
+          s = s.replace(old_bonus, new_bonus)
+
+          old_fn = '''function pnSumBonusValues(proofNumbers: number[]): number[] {
+            let finiteCount = 0;
+            let minFinite = Number.POSITIVE_INFINITY;
+            let maxFinite = Number.NEGATIVE_INFINITY;
+            for (const value of proofNumbers) {
+              if (!Number.isFinite(value)) continue;
+              finiteCount += 1;
+              if (value < minFinite) minFinite = value;
+              if (value > maxFinite) maxFinite = value;
+            }
+            if (finiteCount === 0) return new Array<number>(proofNumbers.length).fill(0);
+
+            const denominator = 1 + maxFinite - minFinite;
+            const bonuses = new Array<number>(proofNumbers.length);
+            for (let index = 0; index < proofNumbers.length; index += 1) {
+              const value = proofNumbers[index] ?? Number.POSITIVE_INFINITY;
+              bonuses[index] = Number.isFinite(value)
+                ? 1 - (value - minFinite) / denominator
+                : 0;
+            }
+            return bonuses;
+          }'''
+          new_fn = '''function pnSumBonusValues(proofNumbers: number[]): number[] {
+            let finiteCount = 0;
+            let finiteSum = 0;
+            for (const value of proofNumbers) {
+              if (!Number.isFinite(value)) continue;
+              finiteCount += 1;
+              finiteSum = Math.min(PROOF_NUMBER_CAP, finiteSum + value);
+            }
+            if (finiteCount === 0) return new Array<number>(proofNumbers.length).fill(0);
+
+            const denominator = 1 + finiteSum;
+            const bonuses = new Array<number>(proofNumbers.length);
+            for (let index = 0; index < proofNumbers.length; index += 1) {
+              const value = proofNumbers[index] ?? Number.POSITIVE_INFINITY;
+              bonuses[index] = Number.isFinite(value)
+                ? 1 - value / denominator
+                : 0;
+            }
+            return bonuses;
+          }'''
+          if old_fn not in s:
+              raise SystemExit('PNSum helper block did not match transformed seeded core')
+          s = s.replace(old_fn, new_fn)
+
+          s = s.replace(
+              'Experimental GPN-PUCT V3C research session.',
+              'Experimental PNSum-PUCT V3C research session.',
+          )
+          s = s.replace(
+              'adds a Generalized Proof-Number inspired\n * PNSum bias to PUCT selection:',
+              'adds a Generalized Proof-Number PNSum bias to PUCT selection:',
+          )
+          s = s.replace(
+              'This is an experimental adaptation of GPN-MCTS to PUCT, not the exact UCT\n * selection formula evaluated in the published GPN-MCTS paper.',
+              'This is an experimental PNSum adaptation of GPN-MCTS to PUCT, not the exact UCT\n * selection formula evaluated in the published GPN-MCTS paper.',
+          )
+          path.write_text(s)
+          PY
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/pnsum.test.ts tests/puct-v3a.test.ts
+      - run: npm run build
+      - name: Commit transformed core
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/research/puct-v3c.ts
+          git diff --cached --check
+          git commit -m "research: implement PNSum PUCT V3C core"
+          git push origin HEAD:research/pnsum-puct-v3c
