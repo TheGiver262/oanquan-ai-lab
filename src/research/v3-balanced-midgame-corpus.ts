@@ -13,6 +13,7 @@ export type BalancedMidgamePosition = {
   danMaterialDiff: number;
   nonEmptyPitDiff: number;
   legalMoves: number;
+  quanAlive: number;
   balancePenalty: number;
 };
 
@@ -70,11 +71,10 @@ function buildCandidates(source: MidgameSource): BalancedMidgamePosition[] {
     if (depth < 6 || current.status !== "playing") continue;
 
     const metrics = stateMetrics(current);
-    if (!metrics.bothQuanAlive) continue;
-    if (metrics.nonEmptyP0 < 2 || metrics.nonEmptyP1 < 2) continue;
+    if (metrics.nonEmptyP0 < 1 || metrics.nonEmptyP1 < 1) continue;
     if (metrics.legalMoves < 2) continue;
-    if (metrics.scoreDiff > 14 || metrics.danMaterialDiff > 14) continue;
 
+    const nonEmptyPitDiff = Math.abs(metrics.nonEmptyP0 - metrics.nonEmptyP1);
     candidates.push({
       id: `${source}@${depth}`,
       source,
@@ -82,12 +82,14 @@ function buildCandidates(source: MidgameSource): BalancedMidgamePosition[] {
       moves: moves.map((entry) => ({ ...entry })),
       scoreDiff: metrics.scoreDiff,
       danMaterialDiff: metrics.danMaterialDiff,
-      nonEmptyPitDiff: Math.abs(metrics.nonEmptyP0 - metrics.nonEmptyP1),
+      nonEmptyPitDiff,
       legalMoves: metrics.legalMoves,
+      quanAlive: metrics.quanAlive,
       balancePenalty:
         metrics.scoreDiff * 2 +
         metrics.danMaterialDiff +
-        Math.abs(metrics.nonEmptyP0 - metrics.nonEmptyP1) * 2 +
+        nonEmptyPitDiff * 2 +
+        (2 - metrics.quanAlive) * 6 +
         (metrics.legalMoves === 2 ? 2 : 0),
     });
   }
@@ -101,14 +103,14 @@ function stateMetrics(state: GameState) {
   const p1Stones = dan.filter((pit) => pit.owner === "P1").reduce((sum, pit) => sum + pit.stones, 0);
   const nonEmptyP0 = dan.filter((pit) => pit.owner === "P0" && pit.stones > 0).length;
   const nonEmptyP1 = dan.filter((pit) => pit.owner === "P1" && pit.stones > 0).length;
-  const quan = state.pits.filter((pit) => pit.kind === "quan");
+  const quanAlive = state.pits.filter((pit) => pit.kind === "quan" && pit.quanStones > 0).length;
   return {
     scoreDiff: Math.abs(state.scores.P0 - state.scores.P1),
     danMaterialDiff: Math.abs(p0Stones - p1Stones),
     nonEmptyP0,
     nonEmptyP1,
     legalMoves: getLegalMoves(state).length,
-    bothQuanAlive: quan.length === 2 && quan.every((pit) => pit.quanStones > 0),
+    quanAlive,
   };
 }
 
