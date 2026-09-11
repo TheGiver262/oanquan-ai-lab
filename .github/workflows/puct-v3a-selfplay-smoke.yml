@@ -5,6 +5,8 @@ on:
     branches:
       - research/gpn-puct-v3
     paths:
+      - "src/research/puct-v3a.ts"
+      - "src/benchmarks/puct-v3-paired.ts"
       - ".github/workflows/puct-v3a-selfplay-smoke.yml"
   workflow_dispatch:
 
