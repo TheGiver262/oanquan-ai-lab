@@ -52,7 +52,8 @@ export function replayBalancedPosition(position: BalancedMidgamePosition): GameS
 }
 
 function buildCandidates(source: MidgameSource): BalancedMidgamePosition[] {
-  const [opening] = source.split(":", 1) as [V3FinalistOpening];
+  const parts = source.split(":");
+  const opening = `${parts[0]}:${parts[1]}` as V3FinalistOpening;
   const continuation = V3_50M_PV[source];
   const state = createInitialState();
   const openingMove = legalMoveFromToken(state, opening);
