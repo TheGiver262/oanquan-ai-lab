@@ -11,19 +11,24 @@ These decisions must not be conflated. A weak engine can make an unfair mode loo
 
 ## Track A — comprehensive AI algorithm
 
-Current families:
+Active families:
 
-- production-reference iterative-deepening alpha-beta/minimax
-- deterministic PVS/Negamax
+- production-reference iterative-deepening alpha-beta/minimax (frozen benchmark baseline)
 - UCT-PB MCTS
+- PUCT-HV: PUCT with Ô Ăn Quan heuristic policy priors and heuristic leaf values
 - V4 exact endgame solver
+
+PVS / NegaScout is retired from active research. Existing implementation/results are archival only and must not be used in future candidate comparisons or new hybrid work.
 
 Planned composite engines:
 
-- **PVS + exact endgame oracle**
+- **PUCT-HV + exact endgame oracle**
 - **UCT-PB + exact endgame oracle**
+- optionally the frozen production alpha-beta family + exact oracle as a control comparison
 - optional proof-oriented/DFPN component for forced subgames if the game graph warrants it
 - optional retrograde/tablebase component once reduced-state enumeration is practical
+
+A learned policy/value PUCT variant is a later optional extension. It is not required to evaluate whether PUCT's prior-guided tree allocation is useful for Ô Ăn Quan.
 
 ### Algorithm scorecard
 
@@ -32,13 +37,13 @@ Every candidate engine should eventually be evaluated on:
 - head-to-head score against a fixed reference pool
 - paired-seat score with P0/P1 alternation
 - Elo or equivalent rating with confidence intervals
-- node efficiency
+- node/simulation efficiency
 - wall-clock efficiency
-- peak memory / transposition-table pressure
+- peak memory / tree or transposition-table pressure
 - deterministic reproducibility where applicable
 - exact-endgame hit rate
 - tactical error/regret against exact solved subgames
-- PV/root-move stability as budget increases
+- root-move stability as budget increases
 - robustness across `standard_v1`, `no_first_quan_v1`, and `mature_quan_v1`
 - robustness across opening protocols rather than only the initial standard position
 
@@ -90,20 +95,27 @@ V4 adds a conservative exact reduced-state solver:
 - cycle detection
 - cycles remain unresolved because the current game rules do not define repetition as a draw
 
-The first probes start from the deepest states on the recorded V3 50M principal variations for `B3:CW` and `B3:CCW` under both independent V3 evaluation families.
+The first probes start from the deepest states on the recorded V3 principal variations for the main opening candidates. Historical PVS-generated corpora may be retained as archived input data, but no new PVS search is run.
 
 V4 success criteria:
 
 - CI correctness
 - terminal and reduced-state exactness tests
 - identify the first practical board-value frontier where exact solving succeeds reliably
-- obtain exact values for at least some states on a B3 principal-variation family, or produce a quantified reason why the current solver is insufficient
+- obtain exact values for at least some states on a principal-variation family, or produce a quantified reason why the current solver is insufficient
 
-## V5 — hybrid search
+## V5 — PUCT and hybrid search
 
-After the exact frontier is measured, build two hybrids:
+First establish PUCT-HV as an independent clock-limited player:
 
-- deterministic PVS + exact oracle
+- tune `c_puct` and policy temperature on a training/tuning corpus that is separate from the final evaluation seeds
+- compare PUCT-HV directly with UCT-PB at equal wall-clock budgets
+- compare PUCT-HV with Thám Hoa, Bảng Nhãn and Trạng Nguyên server-production references with seats alternated
+- report P0/P1 splits, unresolved games and confidence intervals before strength claims
+
+After the exact frontier is measured, build two primary hybrids:
+
+- PUCT-HV + exact oracle
 - UCT-PB + exact oracle
 
 Use the same solved-state corpus to measure tactical regret and exact-hit rate. This phase begins answering which algorithm is the best **comprehensive** player rather than merely the best opening-search tool.
@@ -129,7 +141,7 @@ The final recommendation will contain two explicit choices:
 
 ### AI stack
 
-For example: `PVS + TT + ordering + exact tablebase`, or another stack if experiments beat it.
+For example: `PUCT-HV + exact tablebase`, `UCT-PB + exact tablebase`, or another active stack if experiments beat them.
 
 ### Competitive mode
 
@@ -141,7 +153,7 @@ The two choices are then regression-tested together before anything is proposed 
 
 Use these labels consistently:
 
-- **heuristic signal** — bounded search only
+- **heuristic signal** — bounded or heuristic search only
 - **candidate neutral opening** — multiple bounded signals support near-neutrality
 - **exact solved state** — all required descendants resolved to terminal values under the implemented rules
 - **balanced candidate mode** — statistical and/or bounded evidence, not proof

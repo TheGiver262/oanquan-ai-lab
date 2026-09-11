@@ -40,6 +40,8 @@ type Result = {
     mctsTimeBudgetMs: number;
     productionTimeBudgetMs: number;
     productionNodeBudget: number;
+    puctExploration: number;
+    policyTemperature: number;
     maxMoves: number;
     seed: number;
   };
@@ -57,6 +59,8 @@ const productionProfile = PRODUCTION_TOP_PROFILES[opponent];
 const mctsTimeBudgetMs = intArg("--mcts-ms", productionProfile.timeBudgetMs);
 const productionTimeBudgetMs = intArg("--production-ms", productionProfile.timeBudgetMs);
 const productionNodeBudget = intArg("--production-nodes", productionProfile.nodeBudget);
+const puctExploration = numberArg("--cpuct", 1.5);
+const policyTemperature = numberArg("--policy-temperature", 0.35);
 const learningPath = stringArg("--learning-file");
 const outPath = stringArg("--out");
 const learning = loadLearning(learningPath);
@@ -103,6 +107,8 @@ const result: Result = {
     mctsTimeBudgetMs,
     productionTimeBudgetMs,
     productionNodeBudget,
+    puctExploration,
+    policyTemperature,
     maxMoves,
     seed: baseSeed,
   },
@@ -127,6 +133,8 @@ function playGame(researchSeat: PlayerId, seed: number): GameResult {
         simulations,
         timeBudgetMs: mctsTimeBudgetMs,
         rolloutDepth,
+        puctExploration,
+        policyTemperature,
         random: researchRandom,
       });
       move = decision.move;
@@ -206,7 +214,7 @@ function readOpponent(): ProductionTopDifficulty {
 
 function readVariant(): MctsVariant {
   const value = stringArg("--variant") ?? "uct-pb";
-  if (value === "uct" || value === "uct-pb") return value;
+  if (value === "uct" || value === "uct-pb" || value === "puct-hv") return value;
   throw new Error(`Unknown MCTS variant: ${value}`);
 }
 
@@ -226,6 +234,14 @@ function intArg(name: string, fallback: number): number {
   if (raw === null) return fallback;
   const value = Number.parseInt(raw, 10);
   if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
+  return value;
+}
+
+function numberArg(name: string, fallback: number): number {
+  const raw = stringArg(name);
+  if (raw === null) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
   return value;
 }
 

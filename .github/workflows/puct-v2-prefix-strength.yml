@@ -1,0 +1,73 @@
+name: puct-v2-prefix-strength
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/puct-v2-prefix-strength.yml"
+      - "src/benchmarks/puct-paired.ts"
+      - "src/research/mcts.ts"
+      - "package.json"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/research-mcts.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+
+  benchmark:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - id: uct-pb
+            opponent: uct-pb
+            budget: 600
+            nodes: 100000
+          - id: tham-hoa
+            opponent: tham-hoa
+            budget: 600
+            nodes: 36000
+          - id: trang-nguyen
+            opponent: trang-nguyen
+            budget: 1200
+            nodes: 100000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: mkdir -p results/puct-v2-prefix-strength
+      - name: Two-ply reply corpus vs ${{ matrix.id }}
+        run: >-
+          npm run benchmark:puct:paired --
+          --opponent ${{ matrix.opponent }}
+          --openings B3:CW,B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --research-ms ${{ matrix.budget }}
+          --opponent-ms ${{ matrix.budget }}
+          --opponent-nodes ${{ matrix.nodes }}
+          --rollout-depth 20
+          --cpuct 2.5
+          --policy-temperature 0.6
+          --max-moves 160
+          --seed 20260915
+          --out results/puct-v2-prefix-strength/${{ matrix.id }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puct-v2-prefix-strength-${{ matrix.id }}
+          path: results/puct-v2-prefix-strength/*.json

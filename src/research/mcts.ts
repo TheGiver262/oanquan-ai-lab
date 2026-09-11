@@ -1,7 +1,8 @@
 import { applyMove, getLegalMoves, otherPlayer } from "../engine.js";
 import type { GameState, PlayerId, PlayerMove } from "../types.js";
 
-export type MctsVariant = "uct" | "uct-pb";
+export type MctsVariant = "uct" | "uct-pb" | "puct-hv";
+type UctVariant = Exclude<MctsVariant, "puct-hv">;
 
 export type MctsOptions = {
   variant?: MctsVariant;
@@ -10,6 +11,8 @@ export type MctsOptions = {
   exploration?: number;
   rolloutDepth?: number;
   progressiveBiasWeight?: number;
+  puctExploration?: number;
+  policyTemperature?: number;
   random?: () => number;
 };
 
@@ -46,16 +49,32 @@ type Node = {
   depth: number;
 };
 
+type PuctNode = {
+  state: GameState;
+  parent: PuctNode | null;
+  move: PlayerMove | null;
+  children: PuctNode[];
+  visits: number;
+  valueSum: number;
+  prior: number;
+  depth: number;
+  expanded: boolean;
+};
+
 const DEFAULT_SIMULATIONS = 1_000;
 const DEFAULT_ROLLOUT_DEPTH = 24;
 const DEFAULT_EXPLORATION = Math.SQRT2;
 const DEFAULT_PROGRESSIVE_BIAS = 0.65;
+const DEFAULT_PUCT_EXPLORATION = 1.5;
+const DEFAULT_POLICY_TEMPERATURE = 0.35;
 
 export function chooseMctsMove(state: GameState, options: MctsOptions = {}): MctsDecision {
+  const variant = options.variant ?? "uct";
+  if (variant === "puct-hv") return choosePuctHeuristicMove(state, options);
+
   const started = performance.now();
   const rootPlayer = state.currentPlayer;
   const random = options.random ?? Math.random;
-  const variant = options.variant ?? "uct";
   const maxSimulations = options.simulations ?? DEFAULT_SIMULATIONS;
   const deadline = started + (options.timeBudgetMs ?? Number.POSITIVE_INFINITY);
   const exploration = options.exploration ?? DEFAULT_EXPLORATION;
@@ -130,6 +149,84 @@ export function chooseMctsMove(state: GameState, options: MctsOptions = {}): Mct
   };
 }
 
+function choosePuctHeuristicMove(state: GameState, options: MctsOptions): MctsDecision {
+  const started = performance.now();
+  const rootPlayer = state.currentPlayer;
+  const maxSimulations = options.simulations ?? DEFAULT_SIMULATIONS;
+  const deadline = started + (options.timeBudgetMs ?? Number.POSITIVE_INFINITY);
+  const exploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
+  const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
+  if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
+  if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
+
+  const root = makePuctNode(state, null, null, 1, 0);
+  const legalMoves = getLegalMoves(state);
+  if (legalMoves.length === 0) {
+    return {
+      move: null,
+      diagnostics: { simulations: 0, elapsedMs: performance.now() - started, rootVisits: 0, expandedNodes: 1, maxTreeDepth: 0 },
+      rootStats: [],
+    };
+  }
+
+  let simulations = 0;
+  let expandedNodes = 1;
+  let maxTreeDepth = 0;
+
+  while (simulations < maxSimulations && performance.now() < deadline) {
+    let node = root;
+
+    while (node.state.status === "playing" && node.expanded && node.children.length > 0) {
+      node = selectPuctChild(node, rootPlayer, exploration);
+      if (node.visits === 0) break;
+    }
+
+    if (node.state.status === "playing" && !node.expanded) {
+      const created = expandPuctNode(node, rootPlayer, policyTemperature);
+      expandedNodes += created;
+      if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, node.depth + 1);
+    }
+
+    const reward = normalizedHeuristic(node.state, rootPlayer);
+    for (let cursor: PuctNode | null = node; cursor; cursor = cursor.parent) {
+      cursor.visits += 1;
+      cursor.valueSum += reward;
+    }
+    simulations += 1;
+  }
+
+  if (!root.expanded) {
+    const created = expandPuctNode(root, rootPlayer, policyTemperature);
+    expandedNodes += created;
+    if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, 1);
+  }
+
+  const rankedChildren = [...root.children].sort((a, b) => {
+    if (b.visits !== a.visits) return b.visits - a.visits;
+    const aMean = a.visits > 0 ? a.valueSum / a.visits : -Infinity;
+    const bMean = b.visits > 0 ? b.valueSum / b.visits : -Infinity;
+    if (bMean !== aMean) return bMean - aMean;
+    return b.prior - a.prior;
+  });
+
+  return {
+    move: rankedChildren[0]?.move ?? legalMoves[0] ?? null,
+    diagnostics: {
+      simulations,
+      elapsedMs: performance.now() - started,
+      rootVisits: root.visits,
+      expandedNodes,
+      maxTreeDepth,
+    },
+    rootStats: rankedChildren.map((child) => ({
+      move: child.move as PlayerMove,
+      visits: child.visits,
+      meanValue: child.visits > 0 ? child.valueSum / child.visits : 0,
+      prior: child.prior,
+    })),
+  };
+}
+
 function makeNode(
   state: GameState,
   parent: Node | null,
@@ -150,11 +247,91 @@ function makeNode(
   };
 }
 
+function makePuctNode(
+  state: GameState,
+  parent: PuctNode | null,
+  move: PlayerMove | null,
+  prior: number,
+  depth: number,
+): PuctNode {
+  return {
+    state,
+    parent,
+    move,
+    children: [],
+    visits: 0,
+    valueSum: 0,
+    prior,
+    depth,
+    expanded: false,
+  };
+}
+
+function expandPuctNode(node: PuctNode, rootPlayer: PlayerId, policyTemperature: number): number {
+  if (node.expanded || node.state.status !== "playing") return 0;
+  const moves = getLegalMoves(node.state);
+  const priors = heuristicPolicyPriors(node.state, moves, rootPlayer, policyTemperature);
+  for (const move of moves) {
+    const result = applyMove(node.state, move);
+    if (!result.ok) continue;
+    node.children.push(
+      makePuctNode(result.state, node, move, priors.get(moveKey(move)) ?? 0, node.depth + 1),
+    );
+  }
+  node.expanded = true;
+  return node.children.length;
+}
+
+function heuristicPolicyPriors(
+  state: GameState,
+  moves: PlayerMove[],
+  rootPlayer: PlayerId,
+  policyTemperature: number,
+): Map<string, number> {
+  if (moves.length === 0) return new Map();
+  const sign = state.currentPlayer === rootPlayer ? 1 : -1;
+  const scored = moves.map((move) => {
+    const result = applyMove(state, move);
+    const score = result.ok ? sign * normalizedHeuristic(result.state, rootPlayer) : -1;
+    return { move, score };
+  });
+  const maxScore = Math.max(...scored.map((entry) => entry.score));
+  const weights = scored.map((entry) => Math.exp((entry.score - maxScore) / policyTemperature));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const uniform = 1 / moves.length;
+  return new Map(
+    scored.map((entry, index) => [
+      moveKey(entry.move),
+      total > 0 && Number.isFinite(total) ? (weights[index] ?? 0) / total : uniform,
+    ]),
+  );
+}
+
+function selectPuctChild(node: PuctNode, rootPlayer: PlayerId, exploration: number): PuctNode {
+  const sign = node.state.currentPlayer === rootPlayer ? 1 : -1;
+  const parentVisits = Math.max(1, node.visits);
+  let best = node.children[0];
+  let bestScore = -Infinity;
+
+  for (const child of node.children) {
+    const mean = child.visits > 0 ? child.valueSum / child.visits : 0;
+    const explorationTerm = exploration * child.prior * Math.sqrt(parentVisits) / (1 + child.visits);
+    const score = sign * mean + explorationTerm;
+    if (score > bestScore) {
+      bestScore = score;
+      best = child;
+    }
+  }
+
+  if (!best) throw new Error("PUCT selection reached a node without children");
+  return best;
+}
+
 function selectChild(
   node: Node,
   rootPlayer: PlayerId,
   exploration: number,
-  variant: MctsVariant,
+  variant: UctVariant,
   progressiveBiasWeight: number,
 ): Node {
   const sign = node.state.currentPlayer === rootPlayer ? 1 : -1;
@@ -180,7 +357,7 @@ function selectChild(
   return best;
 }
 
-function chooseExpansionIndex(node: Node, rootPlayer: PlayerId, variant: MctsVariant, random: () => number): number {
+function chooseExpansionIndex(node: Node, rootPlayer: PlayerId, variant: UctVariant, random: () => number): number {
   if (variant === "uct") return Math.floor(random() * node.untriedMoves.length);
 
   const maximizing = node.state.currentPlayer === rootPlayer;
@@ -203,7 +380,7 @@ function chooseExpansionIndex(node: Node, rootPlayer: PlayerId, variant: MctsVar
 function rollout(
   start: GameState,
   rootPlayer: PlayerId,
-  variant: MctsVariant,
+  variant: UctVariant,
   rolloutDepth: number,
   random: () => number,
 ): number {
@@ -279,4 +456,8 @@ function refillSafety(state: GameState, player: PlayerId): number {
   const stones = sideStones(state, player);
   if (stones > 0) return Math.min(stones, 5) / 5;
   return state.scores[player] >= 5 ? 0.25 : -1;
+}
+
+function moveKey(move: PlayerMove): string {
+  return `${move.player}:${move.pit}:${move.dir}`;
 }
