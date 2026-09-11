@@ -1,0 +1,59 @@
+name: puct-v2-tuning
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/research/mcts.ts"
+      - "src/benchmarks/puct-paired.ts"
+      - "package.json"
+      - ".github/workflows/puct-v2-tuning.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test -- --run tests/research-mcts.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+
+  coarse-grid:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 9
+      matrix:
+        cpuct: [0.75, 1.5, 2.5]
+        temperature: [0.2, 0.35, 0.6]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: mkdir -p results
+      - name: Paired PUCT-HV vs UCT-PB
+        run: >-
+          npm run benchmark:puct:paired --
+          --opponent uct-pb
+          --openings B3:CW,B3:CCW
+          --pairs 1
+          --simulations 100000
+          --research-ms 600
+          --opponent-ms 600
+          --rollout-depth 20
+          --cpuct ${{ matrix.cpuct }}
+          --policy-temperature ${{ matrix.temperature }}
+          --max-moves 160
+          --out results/puct-v2-c${{ matrix.cpuct }}-t${{ matrix.temperature }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: puct-v2-c${{ matrix.cpuct }}-t${{ matrix.temperature }}
+          path: results/*.json
