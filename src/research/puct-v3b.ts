@@ -15,6 +15,7 @@ export type PuctV3BDiagnostics = {
   expandedNodes: number;
   maxTreeDepth: number;
   cycleCutoffs: number;
+  proofCycleBlocks: number;
   reusedRoot: boolean;
   reusedRootVisits: number;
   retainedNodes: number;
@@ -31,6 +32,7 @@ export type PuctV3BMoveStat = {
   solvedOutcome: -1 | 0 | 1 | null;
   proofNumberForMover: number | null;
   pnMaxBonus: number;
+  proofBlockedFromParent: boolean;
 };
 
 export type PuctV3BDecision = {
@@ -53,6 +55,13 @@ type Node = {
   expanded: boolean;
   solvedOutcome: SolvedOutcome;
   proofNumbers: ProofNumbers;
+  /**
+   * Conservative edge-local proof mask. If this node was reached through an
+   * edge that closed a strategic cycle, its parent must never use this edge as
+   * proof evidence. The node may later become a real reroot; the mask applies
+   * only when a parent reads the child, not to the node's own subtree.
+   */
+  proofBlockedFromParent: boolean;
 };
 
 const DEFAULT_SIMULATIONS = 100_000;
@@ -66,9 +75,9 @@ const PLAYERS: readonly PlayerId[] = ["P0", "P1"];
 /**
  * Experimental GPN-PUCT V3B research session.
  *
- * This keeps V3A's memory-bounded two-ply tree reuse, exact W/D/L propagation,
- * and cycle policy, then adds a Generalized Proof-Number inspired PNMax bias to
- * PUCT selection:
+ * V3B keeps V3A's memory-bounded two-ply tree reuse, exact W/D/L propagation,
+ * and empirical cycle policy, then adds a Generalized Proof-Number inspired
+ * PNMax bias to PUCT selection:
  *
  *   score = sign * Q + U_PUCT + Cpn * PNMax
  *
@@ -77,10 +86,10 @@ const PLAYERS: readonly PlayerId[] = ["P0", "P1"];
  * an AND/sum recurrence. Non-terminal frontier leaves start at 1, a terminal
  * win for p is 0, and a terminal non-win for p is infinity.
  *
- * Repeated strategic states are empirical cycle cutoffs only. A simulation that
- * hits a repeated path key may update visit/value statistics, but it does not
- * update solved outcomes or proof numbers. This prevents cyclic evidence from
- * becoming a false proof.
+ * Repeated strategic states are empirical cycle cutoffs only. A cycle-closing
+ * edge is permanently masked from proof evidence in its current parent tree.
+ * This is conservative across reroots: it may withhold useful proof evidence,
+ * but cannot turn repetition into a false proof.
  *
  * This is an experimental adaptation of GPN-MCTS to PUCT, not the exact UCT
  * selection formula evaluated in the published GPN-MCTS paper.
@@ -113,6 +122,7 @@ export class GpnPuctV3B {
           expandedNodes: 0,
           maxTreeDepth: 0,
           cycleCutoffs: 0,
+          proofCycleBlocks: 0,
           reusedRoot: sync.reused,
           reusedRootVisits: sync.reusedVisits,
           retainedNodes: countLookupWindowNodes(root),
@@ -137,6 +147,7 @@ export class GpnPuctV3B {
     let expandedNodes = 0;
     let maxTreeDepth = 0;
     let cycleCutoffs = 0;
+    let proofCycleBlocks = 0;
     let proofBiasSelections = 0;
 
     while (
@@ -155,11 +166,15 @@ export class GpnPuctV3B {
         && node.expanded
         && node.children.length > 0
       ) {
-        const selected = this.selectChild(node, exploration, proofBias);
+        const selected = this.selectChild(node, exploration, proofBias, pathKeys);
         if (selected.proofBiasActive) proofBiasSelections += 1;
         const child = selected.child;
         path.push(child);
         if (pathKeys.has(child.key)) {
+          if (!child.proofBlockedFromParent) {
+            child.proofBlockedFromParent = true;
+            proofCycleBlocks += 1;
+          }
           node = child;
           cycleLeaf = true;
           cycleCutoffs += 1;
@@ -185,7 +200,8 @@ export class GpnPuctV3B {
       }
 
       // Cyclic simulations are useful empirical samples, but never proof
-      // evidence. Do not propagate solved outcomes or proof numbers from them.
+      // evidence. The newly blocked edge is picked up by future cycle-free
+      // proof recomputations from its parent.
       if (!cycleLeaf) {
         for (let index = path.length - 1; index >= 0; index -= 1) {
           const cursor = path[index];
@@ -204,9 +220,12 @@ export class GpnPuctV3B {
     }
 
     const rankedChildren = this.rankRootChildren(root);
-    const rootBonuses = pnMaxBonusValues(
-      rankedChildren.map((child) => child.proofNumbers[root.state.currentPlayer]),
+    const rootProofValues = rankedChildren.map((child) =>
+      child.proofBlockedFromParent || child.key === root.key
+        ? Number.POSITIVE_INFINITY
+        : child.proofNumbers[root.state.currentPlayer],
     );
+    const rootBonuses = pnMaxBonusValues(rootProofValues);
     return {
       move: rankedChildren[0]?.move ?? legalMoves[0] ?? null,
       diagnostics: {
@@ -215,6 +234,7 @@ export class GpnPuctV3B {
         expandedNodes,
         maxTreeDepth,
         cycleCutoffs,
+        proofCycleBlocks,
         reusedRoot: sync.reused,
         reusedRootVisits: sync.reusedVisits,
         retainedNodes: countLookupWindowNodes(root),
@@ -228,8 +248,9 @@ export class GpnPuctV3B {
         meanValue: child.visits > 0 ? child.valueSum / child.visits : 0,
         prior: child.prior,
         solvedOutcome: child.solvedOutcome,
-        proofNumberForMover: serializableProofNumber(child.proofNumbers[root.state.currentPlayer]),
+        proofNumberForMover: serializableProofNumber(rootProofValues[index] ?? Number.POSITIVE_INFINITY),
         pnMaxBonus: rootBonuses[index] ?? 0,
+        proofBlockedFromParent: child.proofBlockedFromParent,
       })),
     };
   }
@@ -275,29 +296,57 @@ export class GpnPuctV3B {
     node: Node,
     exploration: number,
     proofBias: number,
+    pathKeys: Set<string>,
   ): { child: Node; proofBiasActive: boolean } {
     const maximizing = node.state.currentPlayer === this.enginePlayer;
     const parentVisits = Math.max(1, node.visits);
-
-    const useful = node.children.filter((child) => {
-      if (maximizing) return child.solvedOutcome !== -1;
-      return child.solvedOutcome !== 1;
-    });
-    const candidates = useful.length > 0 ? useful : node.children;
     const mover = node.state.currentPlayer;
-    const bonuses = pnMaxBonusValues(candidates.map((child) => child.proofNumbers[mover]));
-    const proofBiasActive = proofBias > 0 && bonusHasSelectionSignal(bonuses);
 
-    let best = candidates[0];
+    let hasUseful = false;
+    for (const child of node.children) {
+      if (maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1) {
+        hasUseful = true;
+        break;
+      }
+    }
+
+    let finiteCount = 0;
+    let minFinite = Number.POSITIVE_INFINITY;
+    let maxFinite = Number.NEGATIVE_INFINITY;
+    let hasInfinite = false;
+    for (const child of node.children) {
+      if (hasUseful && !(maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1)) continue;
+      const proofNumber = child.proofBlockedFromParent || pathKeys.has(child.key)
+        ? Number.POSITIVE_INFINITY
+        : child.proofNumbers[mover];
+      if (Number.isFinite(proofNumber)) {
+        finiteCount += 1;
+        if (proofNumber < minFinite) minFinite = proofNumber;
+        if (proofNumber > maxFinite) maxFinite = proofNumber;
+      } else {
+        hasInfinite = true;
+      }
+    }
+
+    const proofDenominator = finiteCount > 0 ? 1 + maxFinite - minFinite : 1;
+    const proofBiasActive = proofBias > 0
+      && finiteCount > 0
+      && (hasInfinite || maxFinite > minFinite);
+
+    let best: Node | undefined;
     let bestScore = Number.NEGATIVE_INFINITY;
     const sign = maximizing ? 1 : -1;
-    for (let index = 0; index < candidates.length; index += 1) {
-      const child = candidates[index];
-      if (!child) continue;
+    for (const child of node.children) {
+      if (hasUseful && !(maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1)) continue;
       const mean = child.visits > 0 ? child.valueSum / child.visits : 0;
       const explorationTerm = exploration * child.prior * Math.sqrt(parentVisits) / (1 + child.visits);
-      const proofTerm = proofBias * (bonuses[index] ?? 0);
-      const score = sign * mean + explorationTerm + proofTerm;
+      const proofNumber = child.proofBlockedFromParent || pathKeys.has(child.key)
+        ? Number.POSITIVE_INFINITY
+        : child.proofNumbers[mover];
+      const proofBonus = Number.isFinite(proofNumber)
+        ? 1 - (proofNumber - minFinite) / proofDenominator
+        : 0;
+      const score = sign * mean + explorationTerm + proofBias * proofBonus;
       if (score > bestScore) {
         bestScore = score;
         best = child;
@@ -357,26 +406,35 @@ export class GpnPuctV3B {
  * represents infinity in the exported/testable API.
  */
 export function computePnMaxBonuses(proofNumbers: Array<number | null>): number[] {
-  return pnMaxBonusValues(proofNumbers.map((value) => value === null ? Number.POSITIVE_INFINITY : value));
+  const numeric = new Array<number>(proofNumbers.length);
+  for (let index = 0; index < proofNumbers.length; index += 1) {
+    const value = proofNumbers[index];
+    numeric[index] = value === null ? Number.POSITIVE_INFINITY : value;
+  }
+  return pnMaxBonusValues(numeric);
 }
 
 function pnMaxBonusValues(proofNumbers: number[]): number[] {
-  const finite = proofNumbers.filter(Number.isFinite);
-  if (finite.length === 0) return proofNumbers.map(() => 0);
-  const minFinite = Math.min(...finite);
-  const maxFinite = Math.max(...finite);
-  const denominator = 1 + maxFinite - minFinite;
-  return proofNumbers.map((value) => {
-    if (!Number.isFinite(value)) return 0;
-    return 1 - (value - minFinite) / denominator;
-  });
-}
+  let finiteCount = 0;
+  let minFinite = Number.POSITIVE_INFINITY;
+  let maxFinite = Number.NEGATIVE_INFINITY;
+  for (const value of proofNumbers) {
+    if (!Number.isFinite(value)) continue;
+    finiteCount += 1;
+    if (value < minFinite) minFinite = value;
+    if (value > maxFinite) maxFinite = value;
+  }
+  if (finiteCount === 0) return new Array<number>(proofNumbers.length).fill(0);
 
-function bonusHasSelectionSignal(bonuses: number[]): boolean {
-  if (bonuses.length < 2) return false;
-  const min = Math.min(...bonuses);
-  const max = Math.max(...bonuses);
-  return max - min > 1e-12;
+  const denominator = 1 + maxFinite - minFinite;
+  const bonuses = new Array<number>(proofNumbers.length);
+  for (let index = 0; index < proofNumbers.length; index += 1) {
+    const value = proofNumbers[index] ?? Number.POSITIVE_INFINITY;
+    bonuses[index] = Number.isFinite(value)
+      ? 1 - (value - minFinite) / denominator
+      : 0;
+  }
+  return bonuses;
 }
 
 function updateProofNumbers(node: Node): void {
@@ -387,22 +445,32 @@ function updateProofNumbers(node: Node): void {
   if (!node.expanded || node.children.length === 0) return;
 
   for (const player of PLAYERS) {
-    const childProofs = node.children.map((child) => child.proofNumbers[player]);
     if (node.state.currentPlayer === player) {
-      node.proofNumbers[player] = Math.min(...childProofs);
-    } else {
-      node.proofNumbers[player] = proofSum(childProofs);
+      let minimum = Number.POSITIVE_INFINITY;
+      for (const child of node.children) {
+        const value = child.proofBlockedFromParent
+          ? Number.POSITIVE_INFINITY
+          : child.proofNumbers[player];
+        if (value < minimum) minimum = value;
+      }
+      node.proofNumbers[player] = minimum;
+      continue;
     }
-  }
-}
 
-function proofSum(values: number[]): number {
-  let total = 0;
-  for (const value of values) {
-    if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
-    total = Math.min(PROOF_NUMBER_CAP, total + value);
+    let total = 0;
+    let infinite = false;
+    for (const child of node.children) {
+      const value = child.proofBlockedFromParent
+        ? Number.POSITIVE_INFINITY
+        : child.proofNumbers[player];
+      if (!Number.isFinite(value)) {
+        infinite = true;
+        break;
+      }
+      total = Math.min(PROOF_NUMBER_CAP, total + value);
+    }
+    node.proofNumbers[player] = infinite ? Number.POSITIVE_INFINITY : total;
   }
-  return total;
 }
 
 function terminalProofNumbers(state: GameState): ProofNumbers {
@@ -473,6 +541,7 @@ function makeNode(
     expanded: false,
     solvedOutcome: state.status === "finished" ? terminalOutcome(state, enginePlayer) : null,
     proofNumbers: frontierProofNumbers(state),
+    proofBlockedFromParent: false,
   };
 }
 
