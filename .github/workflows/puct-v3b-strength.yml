@@ -1,0 +1,61 @@
+name: puct-v3b-strength
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3b
+    paths:
+      - ".github/workflows/puct-v3b-strength.yml"
+      - "src/research/puct-v3b.ts"
+      - "src/research/puct-v3a.ts"
+      - "src/benchmarks/puct-v3b-paired.ts"
+      - "tests/puct-v3b.test.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/puct-v3b.test.ts tests/puct-v3a.test.ts tests/exact-endgame-v4.test.ts tests/endgame-graph-v4.test.ts
+      - run: npm run build
+
+  benchmark:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        replica: [20261001, 20261002, 20261003, 20261004]
+        cpn: [0, 0.1]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run 600 ms paired V3B gate
+        run: >-
+          npm run benchmark:puct:v3b --
+          --openings B3:CW,B3:CCW
+          --reply-corpus
+          --pairs 1
+          --simulations 100000
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --cpn ${{ matrix.cpn }}
+          --research-ms 600
+          --opponent-ms 600
+          --max-moves 160
+          --seed ${{ matrix.replica }}
+          --out v3b-strength-cpn-${{ matrix.cpn }}-${{ matrix.replica }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3b-strength-cpn-${{ matrix.cpn }}-${{ matrix.replica }}
+          path: v3b-strength-cpn-${{ matrix.cpn }}-${{ matrix.replica }}.json
