@@ -409,7 +409,7 @@ export function computePnMaxBonuses(proofNumbers: Array<number | null>): number[
   const numeric = new Array<number>(proofNumbers.length);
   for (let index = 0; index < proofNumbers.length; index += 1) {
     const value = proofNumbers[index];
-    numeric[index] = value === null ? Number.POSITIVE_INFINITY : value;
+    numeric[index] = value == null ? Number.POSITIVE_INFINITY : value;
   }
   return pnMaxBonusValues(numeric);
 }
