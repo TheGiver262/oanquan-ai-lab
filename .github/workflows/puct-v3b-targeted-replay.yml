@@ -1,0 +1,73 @@
+name: puct-v3b-targeted-replay
+
+on:
+  push:
+    branches:
+      - research/gpn-puct-v3b
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/puct-v3b.test.ts tests/puct-v3a.test.ts
+      - run: npm run build
+
+  replay:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - position: B3:CW>T2:CW
+            cpn: 0.1
+            max_moves: 320
+            seed: 20261004
+            slug: cpn-0.1-cw-t2-cw-320
+          - position: B3:CW>T2:CW
+            cpn: 0.1
+            max_moves: 512
+            seed: 20261004
+            slug: cpn-0.1-cw-t2-cw-512
+          - position: B3:CCW>T4:CCW
+            cpn: 0
+            max_moves: 320
+            seed: 20261004
+            slug: cpn-0-ccw-t4-ccw-320
+          - position: B3:CCW>T4:CCW
+            cpn: 0
+            max_moves: 512
+            seed: 20261004
+            slug: cpn-0-ccw-t4-ccw-512
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - name: Replay exact censored pair
+        run: >-
+          npx tsx src/benchmarks/puct-v3b-targeted-replay.ts
+          --position '${{ matrix.position }}'
+          --cpn ${{ matrix.cpn }}
+          --max-moves ${{ matrix.max_moves }}
+          --research-ms 600
+          --opponent-ms 600
+          --simulations 100000
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --seed ${{ matrix.seed }}
+          --out replay-${{ matrix.slug }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3b-replay-${{ matrix.slug }}
+          path: replay-${{ matrix.slug }}.json
