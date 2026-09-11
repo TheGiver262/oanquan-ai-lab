@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createInitialState, getLegalMoves } from "../src/engine.js";
+import { applyMove, createInitialState, getLegalMoves } from "../src/engine.js";
 import { ReusableScoreBoundedPuct } from "../src/research/puct-v3a.js";
 
 describe("PUCT V3A", () => {
@@ -28,6 +28,29 @@ describe("PUCT V3A", () => {
     expect(first.diagnostics.reusedRoot).toBe(false);
     expect(second.diagnostics.reusedRoot).toBe(true);
     expect(second.diagnostics.reusedRootVisits).toBeGreaterThan(0);
+  });
+
+  it("reroots through the played move plus one opponent reply without a global tree index", () => {
+    const state = createInitialState();
+    const engine = new ReusableScoreBoundedPuct();
+    const first = engine.chooseMove(state, { simulations: 128 });
+    expect(first.move).not.toBeNull();
+
+    const afterResearch = applyMove(state, first.move!);
+    expect(afterResearch.ok).toBe(true);
+    if (!afterResearch.ok) return;
+
+    const opponentMove = getLegalMoves(afterResearch.state)[0];
+    expect(opponentMove).toBeDefined();
+    if (!opponentMove) return;
+
+    const afterOpponent = applyMove(afterResearch.state, opponentMove);
+    expect(afterOpponent.ok).toBe(true);
+    if (!afterOpponent.ok) return;
+
+    const next = engine.chooseMove(afterOpponent.state, { simulations: 16 });
+    expect(next.diagnostics.reusedRoot).toBe(true);
+    expect(next.diagnostics.retainedNodes).toBeGreaterThan(0);
   });
 
   it("preserves exact terminal W/D/L without inventing repetition outcomes", () => {
