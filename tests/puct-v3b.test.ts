@@ -5,7 +5,10 @@ import { computePnMaxBonuses, GpnPuctV3B } from "../src/research/puct-v3b.js";
 
 describe("PUCT V3B", () => {
   it("implements PNMax normalization including infinite proof numbers", () => {
-    expect(computePnMaxBonuses([2, 4, null])).toEqual([1, 1 / 3, 0]);
+    const bonuses = computePnMaxBonuses([2, 4, null]);
+    expect(bonuses[0]).toBe(1);
+    expect(bonuses[1]).toBeCloseTo(1 / 3, 12);
+    expect(bonuses[2]).toBe(0);
     expect(computePnMaxBonuses([2, 2])).toEqual([1, 1]);
     expect(computePnMaxBonuses([null, null])).toEqual([0, 0]);
   });
