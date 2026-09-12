@@ -1,0 +1,69 @@
+name: puct-v3c-live-quan-sweep
+
+on:
+  push:
+    branches:
+      - research/pnsum-puct-v3c
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/pnsum.test.ts tests/puct-v3c.test.ts tests/v3-live-quan-corpus.test.ts tests/puct-v3a.test.ts
+      - run: npm run build
+
+  sweep:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - slug: v3a-null
+            research: v3a
+            cpn: 0
+          - slug: v3c-0
+            research: v3c
+            cpn: 0
+          - slug: v3c-0025
+            research: v3c
+            cpn: 0.025
+          - slug: v3c-005
+            research: v3c
+            cpn: 0.05
+          - slug: v3c-01
+            research: v3c
+            cpn: 0.1
+          - slug: v3c-025
+            research: v3c
+            cpn: 0.25
+          - slug: v3c-05
+            research: v3c
+            cpn: 0.5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Fixed-simulation live-Quan paired sweep
+        run: >-
+          npx tsx src/benchmarks/v3c-live-quan-paired.ts
+          --research ${{ matrix.research }}
+          --cpn ${{ matrix.cpn }}
+          --simulations 4000
+          --cpuct 1.5
+          --policy-temperature 0.6
+          --additional-max-moves 160
+          --out v3c-live-${{ matrix.slug }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3c-live-${{ matrix.slug }}
+          path: v3c-live-${{ matrix.slug }}.json
