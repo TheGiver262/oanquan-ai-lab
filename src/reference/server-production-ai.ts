@@ -17,7 +17,7 @@ import {
 } from "./trang-nguyen-best-first-search.js";
 import type { TrangNguyenLearningReader } from "./trang-nguyen-learning.js";
 
-export const PRODUCTION_SOURCE_COMMIT = "4984701ce151ee270a6a5ba5fc9211a6ec2b6996" as const;
+export const PRODUCTION_SOURCE_COMMIT = "73c698762c514d171869a79982fdc86103653e8f" as const;
 export type ProductionStrengthMode = "production-live" | "production-max";
 
 export type ServerProductionOptions = {
