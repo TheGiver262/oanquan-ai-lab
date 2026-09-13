@@ -188,9 +188,13 @@ function pathToken(moves: readonly PlayerMove[]): string {
 
 function strategicStateKey(state: GameState): string {
   return JSON.stringify({
+    ruleset: state.ruleset.canonicalRulesetId,
     currentPlayer: state.currentPlayer,
     scores: state.scores,
     status: state.status,
+    winner: state.winner,
+    firstMovePhase: state.moveNumber === 0,
+    recentMoves: state.recentMoves.map((move) => [move.player, move.pit, move.dir]),
     pits: state.pits.map((pit) => [pit.id, pit.stones, pit.quanStones]),
   });
 }
