@@ -30,6 +30,24 @@ describe("PUCT V3A", () => {
     expect(second.diagnostics.reusedRootVisits).toBeGreaterThan(0);
   });
 
+  it("does not reuse a root across different anti-repeat histories", () => {
+    const state = createInitialState();
+    state.moveNumber = 2;
+    const historyVariant = structuredClone(state);
+    historyVariant.recentMoves = [
+      { player: "P0", pit: "B1", dir: "CW" },
+      { player: "P1", pit: "T1", dir: "CCW" },
+    ];
+
+    const engine = new ReusableScoreBoundedPuct();
+    const first = engine.chooseMove(state, { simulations: 48 });
+    const second = engine.chooseMove(historyVariant, { simulations: 16 });
+
+    expect(first.diagnostics.reusedRoot).toBe(false);
+    expect(second.diagnostics.reusedRoot).toBe(false);
+    expect(second.diagnostics.reusedRootVisits).toBe(0);
+  });
+
   it("reroots through the played move plus one opponent reply without a global tree index", () => {
     const state = createInitialState();
     const engine = new ReusableScoreBoundedPuct();
@@ -53,7 +71,7 @@ describe("PUCT V3A", () => {
     expect(next.diagnostics.retainedNodes).toBeGreaterThan(0);
   });
 
-  it("preserves exact terminal W/D/L without inventing repetition outcomes", () => {
+  it("preserves exact terminal W/D/L outcomes", () => {
     const terminal = createInitialState();
     terminal.status = "finished";
     terminal.winner = "P0";
