@@ -209,7 +209,11 @@ export function createStateHash(state: GameState): string {
     status: state.status,
     winner: state.winner,
     moveNumber: state.moveNumber,
-    recentMoves: state.recentMoves,
+    recentMoves: state.recentMoves.map((move) => ({
+      player: move.player,
+      pit: move.pit,
+      dir: move.dir,
+    })),
   };
   let hash = 0x811c9dc5;
   const value = JSON.stringify(stable);
