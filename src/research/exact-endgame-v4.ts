@@ -72,9 +72,9 @@ class ExactBudgetExhausted extends Error {
  *
  * There is intentionally no heuristic leaf evaluation. A root is marked
  * solved only when every branch needed for the exact minimax value is solved
- * to a real terminal state. Current production rules do not define repetition
- * as a draw, so a repeated strategic state is reported as unresolved rather
- * than silently assigned draw value.
+ * to a real terminal state. The documented repeated-move rule is handled by
+ * the engine, so `recentMoves` is part of the exact strategic state. Any
+ * longer/other recurrence not terminated by the rules remains unresolved.
  */
 export function solveExactEndgame(
   state: GameState,
@@ -196,8 +196,6 @@ function solveNode(
   try {
     const legal = orderExactMoves(state, playerToMove);
     if (legal.length === 0) {
-      // A non-terminal state with no legal move should normally be resolved by
-      // engine refill/no-refill logic. Do not invent a game-theoretic value.
       return { solved: false, reason: "cycle-unresolved" };
     }
 
@@ -260,12 +258,12 @@ function orderExactMoves(state: GameState, player: PlayerId): PlayerMove[] {
 }
 
 /**
- * Canonical key for rule-relevant strategic state.
+ * Canonical key for all transition-relevant state.
  *
- * `recentMoves` and `skipCounts` are excluded because the current engine does
- * not consult them when deciding legal transitions. Full `moveNumber` is also
- * excluded; only the first-move phase is retained because no_first_quan_v1
- * checks `moveNumber === 0`.
+ * `recentMoves` is included because the documented anti-repeat rule makes
+ * [A,B,A,B,A,B] terminal. `skipCounts` is still excluded because the classic
+ * two-player engine does not consult it for legal transitions. Full
+ * `moveNumber` remains unnecessary except for the first-move Quan rule.
  */
 export function exactStrategicStateKey(state: GameState, playerToMove: PlayerId = state.currentPlayer): string {
   const firstMovePhase = state.moveNumber === 0 ? 1 : 0;
@@ -278,6 +276,7 @@ export function exactStrategicStateKey(state: GameState, playerToMove: PlayerId 
     status: state.status,
     winner: state.winner,
     firstMovePhase,
+    recentMoves: state.recentMoves.map((move) => [move.player, move.pit, move.dir]),
   };
   return JSON.stringify(payload);
 }
