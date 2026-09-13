@@ -1,0 +1,62 @@
+name: r1c-wallclock-600ms-gate
+
+on:
+  push:
+    branches:
+      - research/r1c-repeat-parity
+    paths:
+      - ".github/workflows/r1c-wallclock-600ms-gate.yml"
+      - "src/benchmarks/r1c-wallclock-gate.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/engine.test.ts tests/puct-v2.test.ts tests/puct-v3a.test.ts tests/v3-live-quan-corpus.test.ts tests/v3-balanced-midgame-corpus.test.ts
+      - run: npm run build
+
+  gate:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [stage1, stage2, stage3]
+        matchup: [v2-null, v3a-vs-v2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Resolve matchup
+        id: matchup
+        shell: bash
+        run: |
+          if [ "${{ matrix.matchup }}" = "v2-null" ]; then
+            echo "candidate=puct-v2" >> "$GITHUB_OUTPUT"
+          else
+            echo "candidate=puct-v3a" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run 600ms runtime replicate 1
+        run: >-
+          npx tsx src/benchmarks/r1c-wallclock-gate.ts
+          --stage ${{ matrix.stage }}
+          --candidate ${{ steps.matchup.outputs.candidate }}
+          --baseline puct-v2
+          --time-budget-ms 600
+          --simulation-cap 5000000
+          --replicate 1
+          --out r1c-600ms-${{ matrix.stage }}-${{ matrix.matchup }}-r1.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-600ms-${{ matrix.stage }}-${{ matrix.matchup }}-r1
+          path: r1c-600ms-${{ matrix.stage }}-${{ matrix.matchup }}-r1.json
