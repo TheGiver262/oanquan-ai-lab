@@ -1,0 +1,69 @@
+name: r1b-fixed-stage1
+
+on:
+  push:
+    branches:
+      - research/r1b-pie-vs-cam-quan
+    paths:
+      - ".github/workflows/r1b-fixed-stage1.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/r1b-rules-fairness.test.ts tests/opening-pie-analysis.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+
+  fixed-policy:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        policy: [uct, uct-pb]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run eight true-seed complete-corpus passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "results-${{ matrix.policy }}"
+          for seed in 20260914 20260915 20260916 20260917 20260918 20260919 20260920 20260921; do
+            npm run benchmark:r1b:rules -- \
+              --rule both \
+              --engine-x "${{ matrix.policy }}" \
+              --engine-y "${{ matrix.policy }}" \
+              --assignment-mode single \
+              --simulations 2000 \
+              --rollout-depth 20 \
+              --max-moves 160 \
+              --seed "$seed" \
+              --out "results-${{ matrix.policy }}/run-$seed.json" \
+              > /dev/null
+          done
+      - name: Aggregate paired seed-level evidence
+        run: >-
+          npm run benchmark:r1b:aggregate --
+          --input-dir results-${{ matrix.policy }}
+          --stochastic true
+          --bootstrap-samples 10000
+          --bootstrap-seed 20260914
+          --out r1b-stage1-${{ matrix.policy }}-aggregate.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1b-stage1-${{ matrix.policy }}
+          path: |
+            r1b-stage1-${{ matrix.policy }}-aggregate.json
+            results-${{ matrix.policy }}/*.json
