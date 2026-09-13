@@ -23,8 +23,6 @@ TheGiver262/O_an_quan
 commit 73c698762c514d171869a79982fdc86103653e8f
 ```
 
-This pin was refreshed in R1a after a scoped parity audit from the previous pin `4984701ce151ee270a6a5ba5fc9211a6ec2b6996`. The audited production range contains no changes to classic move application, legal-move enumeration, ruleset definitions, board semantics, or the existing runtime top-three AI path. The relevant parity delta is the canonicalization of `recentMoves` in state hashing; production also added a separate deterministic reference evaluator without changing the runtime bot behavior. See `docs/r1a-production-parity-audit.md`.
-
 The top-three reference behavior mirrors `apps/server/src/match/classic-ai-player.ts`, not the older browser-only approximation.
 
 - **Thám Hoa** and **Bảng Nhãn** use the production iterative-deepening alpha-beta pipeline, opening book, move ordering, transposition cache and their production budgets.
