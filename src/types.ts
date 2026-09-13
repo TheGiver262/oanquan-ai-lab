@@ -36,6 +36,8 @@ export type GameState = {
 
 export type PlayerMove = MoveSignature;
 
+export type MatchFinishReason = "both_quan_empty" | "no_refill" | "repeated_moves";
+
 export type MoveEvent =
   | { type: "stones_picked"; player: PlayerId; pit: DanPitId; count: number }
   | { type: "stone_sown"; pit: PitId; stones: number }
@@ -43,7 +45,7 @@ export type MoveEvent =
   | { type: "side_refilled"; player: PlayerId }
   | { type: "move_accepted"; player: PlayerId; pit: DanPitId; dir: Direction }
   | { type: "turn_changed"; currentPlayer: PlayerId }
-  | { type: "match_finished"; winner: PlayerId | null; reason: "both_quan_empty" | "no_refill" };
+  | { type: "match_finished"; winner: PlayerId | null; reason: MatchFinishReason };
 
 export type ApplyMoveResult =
   | { ok: true; state: GameState; events: MoveEvent[] }
