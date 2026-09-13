@@ -97,6 +97,12 @@ Every tournament alternates the research AI between P0 and P1.
 | `bang-nhan` | Bảng Nhãn | 8 | +3 | 55,000 | 900 ms | opening book, TT, ordering, endgame +2 |
 | `trang-nguyen` | Trạng Nguyên | 11 | +5 | 100,000 | 1,200 ms | best-first root search, endgame +4, optional learning |
 
+## R1 research branches
+
+- `research/r1-production-parity`: audited production reference parity.
+- `research/r1b-pie-vs-cam-quan`: intrinsic Cấm Quan vs Standard+Pie fairness research.
+- `research/r1c-ai-promotion`: Standard AI strength research with frozen PUCT V2, V3A incumbent, and an audited 16-state balanced live-Quan corpus.
+
 ## CLI
 
 ```bash
