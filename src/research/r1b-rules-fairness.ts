@@ -28,6 +28,16 @@ export type R1bSearchConfig = {
   maxMoves: number;
 };
 
+export type R1bSearchUsage = {
+  decisions: number;
+  simulations: number;
+  expandedNodes: number;
+  nodes: number;
+  elapsedMs: number;
+  nodeBudgetStops: number;
+  timeBudgetStops: number;
+};
+
 export type R1bGameSpec = {
   ruleCase: R1bRuleCase;
   branch: R1bBranch;
@@ -52,6 +62,7 @@ export type R1bGameResult = {
   unresolved: boolean;
   moves: number;
   seed: number;
+  searchUsageByAgent: Readonly<Record<R1bAgentId, R1bSearchUsage>>;
   productionSourceCommit: string;
 };
 
@@ -74,6 +85,11 @@ export type R1bOpeningSummary = {
     upper: number;
     resolvedValue: number | null;
   }>;
+};
+
+type R1bMoveDecision = {
+  move: PlayerMove | null;
+  usage: R1bSearchUsage;
 };
 
 export const DEFAULT_R1B_SEARCH_CONFIG: R1bSearchConfig = Object.freeze({
@@ -117,13 +133,21 @@ export function playR1bGame(spec: R1bGameSpec): R1bGameResult {
     A: mulberry32(spec.seed ^ 0x9e3779b9),
     B: mulberry32(spec.seed ^ 0x85ebca6b),
   };
+  const searchUsageByAgent: Record<R1bAgentId, R1bSearchUsage> = {
+    A: emptySearchUsage(),
+    B: emptySearchUsage(),
+  };
 
   while (state.status === "playing" && state.moveNumber < spec.config.maxMoves) {
     const seat = state.currentPlayer;
     const agent = seatToAgent[seat];
     const engine = spec.engineByAgent[agent];
-    const move = chooseR1bMove(state, engine, randomByAgent[agent], spec.config);
-    if (!move) return unresolvedResult(spec, seatToAgent, state.moveNumber);
+    const decision = chooseR1bMove(state, engine, randomByAgent[agent], spec.config);
+    addSearchUsage(searchUsageByAgent[agent], decision.usage);
+    const move = decision.move;
+    if (!move) {
+      return unresolvedResult(spec, seatToAgent, state.moveNumber, searchUsageByAgent);
+    }
 
     const applied = applyMove(state, move);
     if (!applied.ok) {
@@ -135,7 +159,7 @@ export function playR1bGame(spec: R1bGameSpec): R1bGameResult {
   }
 
   if (state.status !== "finished") {
-    return unresolvedResult(spec, seatToAgent, state.moveNumber);
+    return unresolvedResult(spec, seatToAgent, state.moveNumber, searchUsageByAgent);
   }
 
   const winnerAgent = state.winner === null ? null : seatToAgent[state.winner];
@@ -153,6 +177,7 @@ export function playR1bGame(spec: R1bGameSpec): R1bGameResult {
     unresolved: false,
     moves: state.moveNumber,
     seed: spec.seed,
+    searchUsageByAgent,
     productionSourceCommit: PRODUCTION_SOURCE_COMMIT,
   };
 }
@@ -262,16 +287,29 @@ function chooseR1bMove(
   engine: R1bEngineId,
   random: () => number,
   config: R1bSearchConfig,
-): PlayerMove | null {
+): R1bMoveDecision {
   if (engine === "uct" || engine === "uct-pb") {
-    return chooseMctsMove(state, {
+    const decision = chooseMctsMove(state, {
       variant: engine,
       simulations: config.simulations,
       rolloutDepth: config.rolloutDepth,
       random,
-    }).move;
+    });
+    return {
+      move: decision.move,
+      usage: {
+        decisions: 1,
+        simulations: decision.diagnostics.simulations,
+        expandedNodes: decision.diagnostics.expandedNodes,
+        nodes: 0,
+        elapsedMs: decision.diagnostics.elapsedMs,
+        nodeBudgetStops: 0,
+        timeBudgetStops: 0,
+      },
+    };
   }
 
+  const startedAt = performance.now();
   const decision = chooseServerProductionMoveWithDiagnostics(
     state,
     "trang-nguyen",
@@ -283,15 +321,27 @@ function chooseR1bMove(
       random,
     },
   );
-  return decision.move
-    ? { player: state.currentPlayer, pit: decision.move.pit, dir: decision.move.dir }
-    : null;
+  return {
+    move: decision.move
+      ? { player: state.currentPlayer, pit: decision.move.pit, dir: decision.move.dir }
+      : null,
+    usage: {
+      decisions: 1,
+      simulations: 0,
+      expandedNodes: 0,
+      nodes: decision.nodeCount,
+      elapsedMs: performance.now() - startedAt,
+      nodeBudgetStops: decision.budgetReason === "node" ? 1 : 0,
+      timeBudgetStops: decision.budgetReason === "time" ? 1 : 0,
+    },
+  };
 }
 
 function unresolvedResult(
   spec: R1bGameSpec,
   seatToAgent: R1bSeatMapping,
   moves: number,
+  searchUsageByAgent: Readonly<Record<R1bAgentId, R1bSearchUsage>>,
 ): R1bGameResult {
   return {
     ruleCase: spec.ruleCase,
@@ -307,8 +357,31 @@ function unresolvedResult(
     unresolved: true,
     moves,
     seed: spec.seed,
+    searchUsageByAgent,
     productionSourceCommit: PRODUCTION_SOURCE_COMMIT,
   };
+}
+
+function emptySearchUsage(): R1bSearchUsage {
+  return {
+    decisions: 0,
+    simulations: 0,
+    expandedNodes: 0,
+    nodes: 0,
+    elapsedMs: 0,
+    nodeBudgetStops: 0,
+    timeBudgetStops: 0,
+  };
+}
+
+function addSearchUsage(target: R1bSearchUsage, source: R1bSearchUsage): void {
+  target.decisions += source.decisions;
+  target.simulations += source.simulations;
+  target.expandedNodes += source.expandedNodes;
+  target.nodes += source.nodes;
+  target.elapsedMs += source.elapsedMs;
+  target.nodeBudgetStops += source.nodeBudgetStops;
+  target.timeBudgetStops += source.timeBudgetStops;
 }
 
 function moveKey(move: Pick<PlayerMove, "pit" | "dir">): string {
