@@ -68,17 +68,19 @@ describe("Opening Balance V4 exact endgame solver", () => {
     expect(result.principalVariation.length).toBeGreaterThan(0);
   });
 
-  it("uses a rule-relevant canonical key rather than history noise", () => {
+  it("includes anti-repeat history but excludes unrelated history noise", () => {
     const a = reducedDrawFixture();
-    const b = structuredClone(a);
-    b.moveNumber = 99;
-    b.recentMoves = [
+    const unrelated = structuredClone(a);
+    unrelated.moveNumber = 99;
+    unrelated.skipCounts.P0.total = 123;
+    expect(exactStrategicStateKey(a)).toBe(exactStrategicStateKey(unrelated));
+
+    const historyVariant = structuredClone(a);
+    historyVariant.recentMoves = [
       { player: "P0", pit: "B1", dir: "CW" },
       { player: "P1", pit: "T5", dir: "CCW" },
     ];
-    b.skipCounts.P0.total = 123;
-
-    expect(exactStrategicStateKey(a)).toBe(exactStrategicStateKey(b));
+    expect(exactStrategicStateKey(historyVariant)).not.toBe(exactStrategicStateKey(a));
 
     const firstMove = structuredClone(a);
     firstMove.moveNumber = 0;
