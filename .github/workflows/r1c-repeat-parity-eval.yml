@@ -1,0 +1,164 @@
+name: r1c-repeat-parity-eval
+
+on:
+  push:
+    branches:
+      - research/r1c-repeat-parity
+    paths:
+      - ".github/workflows/r1c-repeat-parity-eval.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: >-
+          npx vitest run
+          tests/engine.test.ts
+          tests/puct-v2.test.ts
+          tests/puct-v3a.test.ts
+          tests/exact-endgame-v4.test.ts
+          tests/v3-live-quan-corpus.test.ts
+          tests/v3-balanced-midgame-corpus.test.ts
+          tests/server-production-parity.test.ts
+      - run: npm run build
+
+  stage1:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: stage1-v2-null
+            candidate: puct-v2
+            baseline: puct-v2
+          - label: stage1-v3a-vs-v2
+            candidate: puct-v3a
+            baseline: puct-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run B3 reply corpus
+        run: >-
+          npx tsx src/benchmarks/r1c-puct-ablation.ts
+          --candidate ${{ matrix.candidate }}
+          --baseline ${{ matrix.baseline }}
+          --simulations 4000
+          --max-moves 160
+          --openings B3:CW,B3:CCW
+          --reply-corpus
+          --out ${{ matrix.label }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-repeat-${{ matrix.label }}
+          path: ${{ matrix.label }}.json
+
+  stage2:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: stage2-v2-null-live-quan
+            candidate: puct-v2
+            baseline: puct-v2
+          - label: stage2-v3a-vs-v2-live-quan
+            candidate: puct-v3a
+            baseline: puct-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run live-Quan corpus
+        run: >-
+          npx tsx src/benchmarks/r1c-live-quan-ablation.ts
+          --candidate ${{ matrix.candidate }}
+          --baseline ${{ matrix.baseline }}
+          --simulations 4000
+          --additional-max-moves 160
+          --out ${{ matrix.label }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-repeat-${{ matrix.label }}
+          path: ${{ matrix.label }}.json
+
+  stage3:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: stage3-v2-null
+            candidate: puct-v2
+            baseline: puct-v2
+          - label: stage3-v3a-vs-v2
+            candidate: puct-v3a
+            baseline: puct-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run low-material cycle-rich corpus
+        run: >-
+          npx tsx src/benchmarks/r1c-stage3-ablation.ts
+          --candidate ${{ matrix.candidate }}
+          --baseline ${{ matrix.baseline }}
+          --simulations 4000
+          --additional-max-moves 512
+          --out ${{ matrix.label }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-repeat-${{ matrix.label }}
+          path: ${{ matrix.label }}.json
+
+  cycle-targets:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: cycles-v2-null
+            candidate: puct-v2
+            baseline: puct-v2
+          - label: cycles-v3a-vs-v2
+            candidate: puct-v3a
+            baseline: puct-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Replay the two historical V3A cycle targets
+        run: >-
+          npx tsx src/benchmarks/r1c-live-quan-replay.ts
+          --candidate ${{ matrix.candidate }}
+          --baseline ${{ matrix.baseline }}
+          --simulations 4000
+          --additional-max-moves 512
+          --out ${{ matrix.label }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-repeat-${{ matrix.label }}
+          path: ${{ matrix.label }}.json
