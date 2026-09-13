@@ -1,0 +1,31 @@
+name: r1c-stage3-corpus-audit
+
+on:
+  push:
+    branches:
+      - research/r1c-ai-promotion
+    paths:
+      - ".github/workflows/r1c-stage3-corpus-audit.yml"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/v3-balanced-midgame-corpus.test.ts tests/v3-live-quan-corpus.test.ts tests/server-production-parity.test.ts
+      - name: Audit balanced mid/endgame corpus
+        run: >-
+          npx tsx src/benchmarks/r1c-stage3-corpus-audit.ts
+          --probe-depth 10
+          --node-budget 20000
+          --out r1c-stage3-corpus-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-stage3-corpus-audit
+          path: r1c-stage3-corpus-audit.json
