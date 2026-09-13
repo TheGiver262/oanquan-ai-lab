@@ -13,9 +13,25 @@ import {
 } from "../src/reference/trang-nguyen-learning.js";
 
 describe("server production parity snapshot", () => {
-  it("pins the production source commit and initial state hash", () => {
-    expect(PRODUCTION_SOURCE_COMMIT).toBe("4984701ce151ee270a6a5ba5fc9211a6ec2b6996");
+  it("pins the audited production source commit and initial state hash", () => {
+    expect(PRODUCTION_SOURCE_COMMIT).toBe("73c698762c514d171869a79982fdc86103653e8f");
     expect(createStateHash(createInitialState())).toBe("56f223bd");
+  });
+
+  it("canonicalizes recent move fields in the production state hash", () => {
+    const applied = applyMove(createInitialState(), { player: "P0", pit: "B3", dir: "CW" });
+    if (!applied.ok) throw new Error("Expected B3 CW to be legal");
+
+    const canonicalHash = createStateHash(applied.state);
+    const hydrated = {
+      ...applied.state,
+      recentMoves: applied.state.recentMoves.map((move) => ({
+        ...move,
+        ignoredReplayMetadata: "must-not-enter-state-hash",
+      })),
+    } as typeof applied.state;
+
+    expect(createStateHash(hydrated)).toBe(canonicalHash);
   });
 
   it("keeps the full top-three production profiles", () => {
