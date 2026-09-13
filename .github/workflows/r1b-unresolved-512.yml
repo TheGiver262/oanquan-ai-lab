@@ -1,0 +1,54 @@
+name: r1b-unresolved-512
+
+on:
+  push:
+    branches:
+      - research/r1b-pie-vs-cam-quan
+    paths:
+      - ".github/workflows/r1b-unresolved-512.yml"
+  workflow_dispatch:
+
+jobs:
+  replay-uct-512:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Replay persistent UCT cases at cap 512
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p replays-uct-512
+          while read -r rule opening seed; do
+            [ -n "$rule" ] || continue
+            safe_opening="${opening/:/-}"
+            npm run benchmark:r1b:rules -- \
+              --rule "$rule" \
+              --engine-x uct \
+              --engine-y uct \
+              --assignment-mode single \
+              --opening "$opening" \
+              --simulations 2000 \
+              --rollout-depth 20 \
+              --max-moves 512 \
+              --seed "$seed" \
+              --out "replays-uct-512/${rule}-${safe_opening}-${seed}.json" \
+              > /dev/null
+          done <<'CASES'
+          cam-quan B2:CW 20260915
+          standard-pie B3:CW 20260915
+          standard-pie B2:CW 20260916
+          standard-pie B5:CW 20260916
+          standard-pie B1:CCW 20260918
+          standard-pie B1:CCW 20260919
+          cam-quan B5:CW 20260920
+          standard-pie B5:CW 20260920
+          CASES
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1b-unresolved-replay-uct-512
+          path: replays-uct-512/*.json
