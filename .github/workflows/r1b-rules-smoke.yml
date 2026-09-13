@@ -1,0 +1,43 @@
+name: r1b-rules-smoke
+
+on:
+  push:
+    branches:
+      - research/r1b-pie-vs-cam-quan
+    paths:
+      - ".github/workflows/r1b-rules-smoke.yml"
+      - "src/research/r1b-rules-fairness.ts"
+      - "src/benchmarks/r1b-rules-fairness.ts"
+      - "tests/r1b-rules-fairness.test.ts"
+      - "docs/r1b-rules-benchmark-protocol.md"
+      - "package.json"
+  workflow_dispatch:
+
+jobs:
+  verify-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/r1b-rules-fairness.test.ts tests/opening-pie-analysis.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+      - name: Run non-promotional R1b harness smoke
+        run: >-
+          npm run benchmark:r1b:rules --
+          --rule both
+          --engine-x uct
+          --engine-y uct-pb
+          --limit-openings 1
+          --simulations 8
+          --rollout-depth 4
+          --max-moves 4
+          --seed 20260914
+          --out r1b-smoke.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1b-rules-smoke
+          path: r1b-smoke.json
