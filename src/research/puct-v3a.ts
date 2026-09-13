@@ -60,8 +60,9 @@ const REAL_MOVE_REUSE_PLIES = 2;
  * - retain/reuse the subtree reached by the actual game;
  * - conservatively propagate exact terminal W/D/L bounds.
  *
- * Repeated strategic states are cycle cutoffs only. Current classic rules do
- * not define repetition adjudication, so a cycle is never marked solved.
+ * The documented classic rule terminates [A,B,A,B,A,B] move-pair repetition.
+ * `recentMoves` is therefore part of the strategic key. Any remaining exact
+ * key recurrence is only a cycle cutoff and is never invented as a draw.
  * Proof-number bias is intentionally deferred to V3B.
  */
 export class ReusableScoreBoundedPuct {
@@ -156,8 +157,6 @@ export class ReusableScoreBoundedPuct {
         cursor.valueSum += reward;
       }
 
-      // A path that hit a repeated strategic position may update empirical
-      // statistics, but it must not create a game-theoretic solved result.
       if (!cycleLeaf) {
         for (let index = path.length - 1; index >= 0; index -= 1) {
           const cursor = path[index];
@@ -197,16 +196,6 @@ export class ReusableScoreBoundedPuct {
     };
   }
 
-  /**
-   * The same engine is called once per one of its turns, so the next real root
-   * is normally two plies below the previous root: our played move followed by
-   * the opponent move. Search only that bounded window and then replace
-   * `this.root`. With no parent/global-index references, every sibling branch
-   * outside the chosen subtree becomes collectible immediately.
-   *
-   * This gives tree reuse without the unbounded memory growth of the earlier
-   * session-wide Map, which reached the Node heap limit in 600 ms benchmarks.
-   */
   private syncRoot(state: GameState): { root: Node; reused: boolean; reusedVisits: number } {
     const key = strategicStateKey(state);
     const existing = this.root ? findBestMatchingDescendant(this.root, key, REAL_MOVE_REUSE_PLIES) : null;
@@ -300,8 +289,6 @@ export class ReusableScoreBoundedPuct {
 
   private rankRootChildren(root: Node): Node[] {
     return [...root.children].sort((left, right) => {
-      // Exact root outcome must dominate visit count. In particular, a solved
-      // draw root may not choose a heavily visited child already proven loss.
       if (root.solvedOutcome !== null) {
         const leftSolved = left.solvedOutcome ?? -2;
         const rightSolved = right.solvedOutcome ?? -2;
@@ -362,14 +349,12 @@ function makeNode(
   };
 }
 
-/**
- * Exact serialization of the same rule-relevant fields used by the V4 exact
- * solver, but without JSON object allocation/stringification. Pit ids are
- * included so this remains robust to any future board ordering.
- */
 function strategicStateKey(state: GameState): string {
   const pits = state.pits
     .map((pit) => `${pit.id}:${pit.stones}:${pit.quanStones}`)
+    .join(",");
+  const recentMoves = state.recentMoves
+    .map((move) => `${move.player}:${move.pit}:${move.dir}`)
     .join(",");
   return [
     state.ruleset.canonicalRulesetId,
@@ -379,6 +364,7 @@ function strategicStateKey(state: GameState): string {
     state.status,
     state.winner ?? "-",
     state.moveNumber === 0 ? 1 : 0,
+    `history=${recentMoves}`,
     pits,
   ].join("|");
 }
