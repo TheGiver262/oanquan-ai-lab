@@ -1,227 +1,188 @@
-# R1c — AI promotion research protocol
+# R1c AI promotion protocol
 
-Status: pre-registered research protocol. No production change, merge, deploy, or AI replacement is authorized by this document.
+## Status
 
-Base: `research/r1-production-parity`, which audits the production reference against `TheGiver262/O_an_quan@73c698762c514d171869a79982fdc86103653e8f`.
+Pre-registered research protocol for the Standard/classic 2-player ruleset. No production behavior changes are authorized by this document.
 
-## Research question
+## Objective
 
-R1c asks only:
+Determine whether the current research incumbent, PUCT V3A, is meaningfully stronger than its frozen PUCT V2 baseline and remains competitive against clean external baselines before any later structural candidate can replace it.
 
-> Which AI/search stack is stronger and more operationally stable on one frozen 2-player ruleset?
+A "meaningfully stronger" claim requires consistent paired evidence across more than one state distribution. A single opening suite, raw W/L count, or timing-sensitive replay is insufficient.
 
-R1c does **not** change the game rule while comparing AI. Pie/Cấm Quan research belongs to R1b and may not be mixed into the headline R1c strength result.
+## Fixed rules semantics
 
-## Frozen ruleset
+Primary ruleset: `oaq:classic_2p:standard:v1`.
 
-Primary R1c ruleset:
+- No Pie decision inside these AI-strength games.
+- No threefold adjudication.
+- Repeated strategic states inside V3A search are heuristic cycle cutoffs only; they are never automatic draws or solved proof evidence.
+- Game-cap exhaustion is unresolved/censored, never heuristic-adjudicated.
+- No root Dirichlet noise.
 
-`oaq:classic_2p:standard:v1`
+Pie + threefold belongs to a later dedicated rule profile after the strongest Standard algorithm is settled.
 
-This preserves continuity with the existing PUCT V2/V3A/V3B research evidence. If a future rules decision promotes Pie or another competitive ruleset, that ruleset requires a separate validation pass; it does not retroactively change R1c Standard evidence.
+## Production parity prerequisite
 
-## Current incumbent wording
+R1c is stacked on the completed R1a production-parity audit. The production reference pin is:
 
-PUCT V3A is treated as:
+`TheGiver262/O_an_quan@73c698762c514d171869a79982fdc86103653e8f`
 
-> research incumbent/candidate with a mild positive signal; not statistically proven stronger.
+R1a verified that core classic move legality/rules semantics were unchanged and refreshed state-hash parity. R1c may not make a strength claim if those parity tests regress.
 
-Do not call V3A the proven strongest AI.
+## Incumbent
 
-V3B/PNMax remains a rejected promotion experiment and is not reopened in R1c.
+PUCT V3A: `ReusableScoreBoundedPuct`.
 
-## Baselines
+Frozen properties:
 
-R1c distinguishes three baseline roles.
+- two-ply bounded subtree reuse;
+- no session-wide global node map;
+- exact terminal W/D/L propagation;
+- cycle cutoff + heuristic for repeated strategic state;
+- no repetition-as-draw assumption;
+- `c_puct = 1.5`;
+- policy temperature `0.6`;
+- no rollout;
+- heuristic policy/value;
+- no root noise.
 
-### Production reference
+Historical V3A evidence is retained as context only. The earlier 128-game V2 comparison showed a mild reproducible positive signal, not statistical proof of superiority.
 
-Audited server production AI reference, with Trạng Nguyên as the strongest retained production-code comparator.
+## Frozen same-family baseline
 
-Without the exact deployed learning snapshot, every Trạng Nguyên result must remain labeled:
+PUCT V2 is a fresh-root, stateless PUCT search with the same heuristic policy/value family.
 
-`code-parity-no-live-learning-snapshot`
+Frozen comparison settings:
 
-Such a result is not a complete comparison against live deployed strength.
+- `c_puct = 1.5`;
+- policy temperature `0.6`;
+- no rollout;
+- no root noise;
+- fixed-simulation comparisons against V3A use exactly the same simulation budget per decision.
 
-### Direct algorithmic baseline
+The isolated R1c implementation lives in `src/research/puct-v2.ts`. It is extracted from the historical `puct-hv` path rather than re-adding that variant to the current mixed MCTS module.
 
-Frozen PUCT V2 (`c_puct=1.5`, heuristic-policy temperature `0.6`, root noise disabled) is retained only where a direct same-family ablation is needed.
+## Evidence strata
 
-### Research incumbent
+A promotion-strength conclusion requires evidence from all three strata:
 
-Memory-bounded PUCT V3A:
+1. **Opening/reply corpus** — historical B3:CW and B3:CCW forced openings with legal reply diversification. This is continuity/regression evidence.
+2. **Balanced live-Quan corpus** — deterministic balanced early/midgame states while both Quan stones remain alive. R1c ports the exact previously-audited V3C generator blob `eaccc3e1fd44be7f99e75d6fb0bcfdb96a7e71e7` plus test blob `b6969ef017a5a8a60a96516daf3b957b156b76ad`. The corpus targets depths 4–11, two positions per depth, score difference <= 8, dân-material difference <= 10, >= 3 legal moves, and both Quan alive.
+3. **Low-material / cycle-sensitive corpus** — late positions that stress refill/cycle behavior and exact terminal propagation. This stratum must be audited separately before use.
 
-- bounded two-ply tree reuse;
-- conservative exact terminal W/D/L propagation;
-- cycle cutoff without inventing repetition-as-draw;
-- no global session-wide node map.
-
-## Corpus strata
-
-A production promotion claim may not rely on one opening family.
-
-R1c uses three independently reported strata:
-
-1. **opening/reply corpus** — opening-sensitive positions, including the historical B3 reply corpus for continuity;
-2. **balanced live-Quan midgame corpus** — both Quan alive, balanced score/material, sufficient branching, generated deterministically and audited before use;
-3. **low-material / cycle-sensitive corpus** — reduced positions that exercise endgame, refill, and loopy-state behavior.
-
-Results are reported per stratum before any aggregate. A candidate that gains only on one repeated position is not promoted as generally stronger.
+No candidate may be called strongest from only one stratum.
 
 ## Pairing
 
-Every benchmark state is played with engine ownership swapped between P0 and P1.
+For every forced state:
 
-Primary game-level statistic:
+- play candidate as P0 and baseline as P1;
+- play baseline as P0 and candidate as P1;
+- keep the same forced prefix/state;
+- `pairDiff` is the primary result unit.
 
-`pairDiff = candidatePoints - baselinePoints`, range `[-2,+2]`.
+For a two-game pair, candidate points use win=1, draw=0.5, loss=0. Pair difference is candidate points minus baseline points, range [-2,+2]. A pair is excluded from resolved pair statistics if either game is unresolved.
 
-Unresolved individual games censor the corresponding pair until replay or higher-cap resolution. They are never heuristic-adjudicated.
+Report raw W/L/D/U separately; do not substitute it for paired differential.
 
-Raw W/L/D remains secondary when logical-seat bias is large.
+## Resource fairness
 
-## Resource modes must remain separate
+### Same-family V3A vs V2
 
-### A. Fixed-simulation / fixed-node algorithmic tests
+Primary diagnostic mode is fixed simulations with identical `c_puct` and temperature. No wall-clock search cap is applied except an external workflow runaway timeout.
 
-Use only when resource units are comparable within an algorithm family.
+This isolates the structural contribution of bounded subtree reuse + exact solved propagation from machine scheduling noise.
 
-Examples:
+Both V2 and V3A are deterministic at fixed simulations. Repeating them under different labels does not create independent random samples and must not be called a multi-seed experiment.
 
-- V3A vs V2: same fixed simulation budget;
-- a future PUCT variant vs V3A: same fixed simulation budget.
+### Cross-family comparisons
 
-Do **not** claim that 10,000 PUCT simulations equal 10,000 alpha-beta/Trạng Nguyên nodes.
+Cross-family promotion evidence uses equal wall-clock budget per decision. Simulation count is reported as a diagnostic, not normalized against alpha-beta/best-first node count.
 
-Fixed-resource tests answer algorithmic allocation/reproducibility questions; they do not by themselves establish production latency suitability.
+For Trạng Nguyên without the deployed learning snapshot, label results:
 
-### B. Wall-clock playing-strength tests
+`code-parity-no-live-learning-snapshot`
 
-Cross-family comparisons use equal declared wall-clock envelopes and separately report actual work completed.
+Such a comparison is a clean code-path baseline, not a complete deployed-strength statement if production learning memory is enabled.
 
-For every engine:
+## Stage 1 — direct V3A ablation
 
-- actual decisions;
-- actual simulations/nodes;
-- elapsed search time;
-- budget-stop reason;
-- cycle diagnostics where exposed.
+Run, in order:
 
-Wall-clock results are practical playing-strength evidence, not deterministic game-theoretic proof.
+1. V2 vs V2 null control on the opening/reply corpus.
+2. V3A vs V2 on the exact same corpus and fixed simulation budget.
 
-## Randomness and replicates
+Frozen first-pass budget:
 
-A value is called a **seed** only if it is consumed by the tested search path.
+- 4,000 simulations per decision;
+- `c_puct=1.5`;
+- policy temperature `0.6`;
+- move cap 160;
+- B3:CW and B3:CCW with all legal replies;
+- no RNG labels.
 
-Current V3A has no search RNG/root noise in its active path. Therefore:
+Null-control validity condition: all completed V2 mirror pairs must be pair-neutral. If not, the harness is invalid and V3A result is not interpreted.
 
-- fixed-simulation V3A is deterministic on a fixed state/config;
-- repeated fixed-simulation executions do not create independent samples;
-- repeated wall-clock V3A executions are runtime replicates because timing changes completed work, not RNG seeds.
+Stage 1 is continuity evidence, not sufficient for final promotion.
 
-Stochastic opponents may use true seeds, but this does not make the deterministic candidate itself independently seeded.
+## Stage 2 — balanced live-Quan
 
-## Correctness gate before strength
+After Stage 1 harness validation, run the same fixed-simulation V3A vs V2 pairing on all 16 audited live-Quan states. The exact corpus generator/test must pass on the R1a audited engine before results are interpreted.
 
-A candidate is not strength-tested until all pass:
+## Stage 3 — low-material/cycle-sensitive
 
-- typecheck/tests/build;
-- legal move invariant;
-- state/ruleset hash parity with the audited R1a base;
-- deterministic fixed-resource replay where applicable;
-- cycle/repetition semantics preserved;
-- no hidden heuristic adjudication of unresolved games;
-- bounded retained-memory design verified for stateful search.
+Construct/audit a separate deterministic corpus emphasizing:
 
-## Strength evidence classes
+- low dân material;
+- refill-relevant states;
+- recurrent/cycle-prone state graphs;
+- both players to move;
+- multiple opening ancestries;
+- no heuristic outcome labels baked into selection.
 
-R1c uses four explicit labels.
+Then run the same paired fixed-simulation V3A vs V2 gate.
 
-### `legal/correctness only`
+## Stage 4 — cross-family wall-clock
 
-The AI produces valid moves and satisfies technical invariants. No strength claim.
+Only after the same-family structural evidence is understood, compare the incumbent/candidate against clean cross-family baselines such as Trạng Nguyên with equal wall-clock budgets. Do not call fixed PUCT simulations equivalent to best-first nodes.
 
-### `non-regressing research baseline`
+## Reporting
 
-Direct paired evidence shows no meaningful regression and implementation/runtime behavior is stable enough for further research.
+Every artifact must report:
 
-### `meaningfully stronger`
-
-Requires a positive paired signal that is not concentrated in one state, persists across relevant corpus strata/resource checks, and has an uncertainty interval excluding no-gain under the registered analysis.
-
-### `production-review eligible`
-
-Requires `meaningfully stronger` plus operational gates below. This label still does not authorize merge/deploy.
-
-## Common promotion metrics
-
-Every promotion-quality report includes:
-
+- source commit / ruleset;
+- forced position identifier;
+- engine ownership P0/P1;
+- fixed simulations or wall-clock budget as appropriate;
 - W/L/D/U;
-- resolved score;
-- completed swapped pairs;
-- mean/median pair differential;
-- favorable/neutral/unfavorable pair counts;
-- per-position and per-stratum results;
+- completed pairs;
+- pair-diff distribution and mean;
 - unresolved rate;
-- P0/P1 split;
-- cycle cutoffs;
-- simulations/nodes per decision;
-- P50/P95/P99 decision latency;
-- peak heap/RSS in the production-like harness;
-- cancellation/timeout behavior;
-- fallback legality;
-- replay determinism classification.
+- per-position results;
+- search diagnostics (simulations, expanded nodes, depth, elapsed time);
+- V3A reuse, retained-tree/cycle diagnostics where available.
 
-## Uncertainty
+No fake seed count or pseudo-replication is allowed.
 
-Do not manufacture statistical power by replaying a deterministic state under new labels.
+## Candidate promotion rule
 
-For stochastic search, confidence intervals may resample true seed-level paired observations.
+V3A remains incumbent unless a later candidate demonstrates:
 
-For deterministic fixed-resource corpora, a bootstrap over positions is only a **descriptive corpus-sensitivity interval**. It must be labeled as such and must not be described as independent repeated game evidence.
+- no correctness/parity regression;
+- paired non-regression on every required stratum;
+- positive paired evidence on at least one discriminative stratum;
+- no pathological cycle or memory behavior;
+- acceptable wall-clock throughput;
+- no dependence on heuristic adjudication of unresolved games.
 
-Repeated wall-clock runs may quantify runtime robustness, but they are not independent RNG samples.
+For replacing V3A with a new algorithm, evidence must be materially stronger than a handful of raw wins. Exact statistical thresholds may be pre-registered for a stochastic candidate, but deterministic corpora are interpreted at the position/pair level rather than by inventing random seeds.
 
-## Reject gates
+## What R1c does not authorize
 
-Reject or keep research-only if any of the following occurs:
-
-- positive gain exists only in a smoke/low-budget run and disappears at the intended budget;
-- paired advantage is zero/negative at the intended gate;
-- gain is concentrated in one repeated benchmark state without broader support;
-- unresolved/censoring asymmetry creates the apparent raw-score gain;
-- cycle-cutoff behavior becomes pathological;
-- memory grows without a bounded retention strategy or causes OOM;
-- P95/P99 latency breaches the production envelope;
-- cancellation cannot reliably stop search and return a legal fallback;
-- current audited production parity is lost.
-
-V3B is the canonical example of a rejected result: a low-budget signal disappeared at 600 ms and cycle behavior regressed severely.
-
-## Operational production-review gate
-
-Before a research AI can become production-review eligible, run a production-like server harness and pre-register limits for:
-
-- P50/P95/P99 latency;
-- peak process RSS and JS heap;
-- concurrent AI decisions under expected server load;
-- cancellation deadline;
-- legal fallback after cancellation/timeout;
-- long-run retained-memory stability;
-- replay/state-hash consistency.
-
-The limits must be compared with the current production baseline and server capacity target; they may not be invented after seeing candidate measurements.
-
-## R1c first implementation step
-
-The first R1c code change is intentionally narrow:
-
-1. port the **final memory-bounded V3A** implementation onto the audited R1a base;
-2. port its correctness/reuse/cycle tests;
-3. verify that no old production pin is reintroduced;
-4. do not bring the rejected V3A global-index prototype or V3B PNMax into the incumbent implementation;
-5. do not run a strength tournament until this correctness gate is green.
-
-No R1c result authorizes production changes without a later explicit production-review approval.
+- production AI changes;
+- rank/MMR changes;
+- Pie + threefold implementation;
+- resurrection of PVS/NegaScout as an active candidate;
+- treating Bảng Nhãn as a clean strength baseline;
+- labeling Trạng Nguyên as full live strength without a matching learning snapshot.
