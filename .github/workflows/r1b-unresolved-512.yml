@@ -52,3 +52,51 @@ jobs:
         with:
           name: r1b-unresolved-replay-uct-512
           path: replays-uct-512/*.json
+
+  replay-uct-pb-512:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Replay persistent UCT-PB cases at cap 512
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p replays-uct-pb-512
+          while read -r rule opening seed; do
+            [ -n "$rule" ] || continue
+            safe_opening="${opening/:/-}"
+            npm run benchmark:r1b:rules -- \
+              --rule "$rule" \
+              --engine-x uct-pb \
+              --engine-y uct-pb \
+              --assignment-mode single \
+              --opening "$opening" \
+              --simulations 2000 \
+              --rollout-depth 20 \
+              --max-moves 512 \
+              --seed "$seed" \
+              --out "replays-uct-pb-512/${rule}-${safe_opening}-${seed}.json" \
+              > /dev/null
+          done <<'CASES'
+          standard-pie B4:CW 20260914
+          standard-pie B5:CW 20260914
+          standard-pie B4:CW 20260915
+          standard-pie B5:CW 20260915
+          cam-quan B4:CCW 20260917
+          standard-pie B2:CCW 20260917
+          standard-pie B4:CW 20260917
+          cam-quan B4:CW 20260918
+          standard-pie B2:CW 20260920
+          standard-pie B2:CCW 20260920
+          standard-pie B4:CW 20260920
+          cam-quan B2:CCW 20260921
+          CASES
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1b-unresolved-replay-uct-pb-512
+          path: replays-uct-pb-512/*.json
