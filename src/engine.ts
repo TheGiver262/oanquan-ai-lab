@@ -1,4 +1,17 @@
-import type { ApplyMoveResult, DanPitId, Direction, GameState, MoveEvent, Pit, PitId, PlayerId, PlayerMove, ResolvedRuleset } from "./types.js";
+import type {
+  ApplyMoveResult,
+  DanPitId,
+  Direction,
+  GameState,
+  MatchFinishReason,
+  MoveEvent,
+  MoveSignature,
+  Pit,
+  PitId,
+  PlayerId,
+  PlayerMove,
+  ResolvedRuleset,
+} from "./types.js";
 
 export const CLASSIC_STANDARD_RULESET: ResolvedRuleset = Object.freeze({
   canonicalRulesetId: "oaq:classic_2p:standard:v1",
@@ -107,8 +120,13 @@ export function applyMove(state: GameState, move: PlayerMove): ApplyMoveResult {
   if (!isFinished(nextState)) {
     nextState.currentPlayer = otherPlayer(move.player);
     recordRecentMove(nextState, move);
-    events.push({ type: "turn_changed", currentPlayer: nextState.currentPlayer });
-    maybeRefillSide(nextState, nextState.currentPlayer, events);
+    if (hasRepeatedMovePair(nextState.recentMoves)) {
+      collectRemainingDanOnly(nextState);
+      finishMatch(nextState, events, "repeated_moves");
+    } else {
+      events.push({ type: "turn_changed", currentPlayer: nextState.currentPlayer });
+      maybeRefillSide(nextState, nextState.currentPlayer, events);
+    }
   } else {
     recordRecentMove(nextState, move);
   }
@@ -116,6 +134,21 @@ export function applyMove(state: GameState, move: PlayerMove): ApplyMoveResult {
   nextState.skipCounts[move.player] = { ...nextState.skipCounts[move.player], consecutive: 0 };
   events.unshift({ type: "move_accepted", player: move.player, pit: move.pit, dir: move.dir });
   return { ok: true, state: nextState, events };
+}
+
+export function hasRepeatedMovePair(recentMoves: readonly MoveSignature[]): boolean {
+  if (recentMoves.length < 6) return false;
+  const moves = recentMoves.slice(-6);
+  const [a0, b0, a1, b1, a2, b2] = moves;
+  return Boolean(
+    a0 && b0 && a1 && b1 && a2 && b2 &&
+    sameMove(a0, a1) && sameMove(a0, a2) &&
+    sameMove(b0, b1) && sameMove(b0, b2)
+  );
+}
+
+function sameMove(left: MoveSignature, right: MoveSignature): boolean {
+  return left.player === right.player && left.pit === right.pit && left.dir === right.dir;
 }
 
 function getQuanCaptureDecision(state: GameState, pit: Pit): "capture" | "stop" | "forbidden" {
@@ -181,7 +214,18 @@ function collectRemaining(state: GameState): void {
   }
 }
 
-function finishMatch(state: GameState, events: MoveEvent[], reason: "both_quan_empty" | "no_refill", forcedWinner?: PlayerId): void {
+function collectRemainingDanOnly(state: GameState): void {
+  for (const player of ["P0", "P1"] as const) {
+    for (const pitId of PLAYER_PITS[player]) {
+      const pit = state.pits[pitIndex(state, pitId)];
+      if (!pit) continue;
+      state.scores[player] += pit.stones;
+      pit.stones = 0;
+    }
+  }
+}
+
+function finishMatch(state: GameState, events: MoveEvent[], reason: MatchFinishReason, forcedWinner?: PlayerId): void {
   state.status = "finished";
   state.winner = forcedWinner ?? (state.scores.P0 === state.scores.P1 ? null : state.scores.P0 > state.scores.P1 ? "P0" : "P1");
   events.push({ type: "match_finished", winner: state.winner, reason });
