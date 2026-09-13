@@ -14,6 +14,7 @@ import {
   r1bSeatMapping,
   summarizeR1bOpening,
   type R1bGameResult,
+  type R1bSearchUsage,
 } from "../src/research/r1b-rules-fairness.js";
 
 describe("R1b rules fairness harness", () => {
@@ -123,6 +124,8 @@ describe("R1b rules fairness harness", () => {
     expect(result.moves).toBe(2);
     expect(result.unresolved).toBe(true);
     expect(result.openerValue).toBeNull();
+    expect(result.searchUsageByAgent.A.decisions + result.searchUsageByAgent.B.decisions).toBe(1);
+    expect(result.searchUsageByAgent.A.simulations + result.searchUsageByAgent.B.simulations).toBe(8);
   });
 });
 
@@ -141,7 +144,20 @@ function fakeGame(overrides: Partial<R1bGameResult>): R1bGameResult {
     unresolved: false,
     moves: 40,
     seed: 1,
+    searchUsageByAgent: { A: emptyUsage(), B: emptyUsage() },
     productionSourceCommit: "test",
     ...overrides,
+  };
+}
+
+function emptyUsage(): R1bSearchUsage {
+  return {
+    decisions: 0,
+    simulations: 0,
+    expandedNodes: 0,
+    nodes: 0,
+    elapsedMs: 0,
+    nodeBudgetStops: 0,
+    timeBudgetStops: 0,
   };
 }
