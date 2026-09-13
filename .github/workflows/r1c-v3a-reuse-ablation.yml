@@ -1,0 +1,34 @@
+name: r1c-v3a-reuse-ablation
+
+on:
+  push:
+    branches:
+      - research/r1c-ai-promotion
+    paths:
+      - ".github/workflows/r1c-v3a-reuse-ablation.yml"
+  workflow_dispatch:
+
+jobs:
+  ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/puct-v2.test.ts tests/puct-v3a.test.ts tests/v3-live-quan-corpus.test.ts tests/server-production-parity.test.ts
+      - run: npm run build
+      - name: Run real-root reuse ablation
+        run: >-
+          npx tsx src/benchmarks/r1c-v3a-reuse-ablation.ts
+          --simulations 4000
+          --max-continuation-moves 512
+          --repeat-stop 6
+          --out r1c-v3a-reuse-ablation.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-v3a-reuse-ablation
+          path: r1c-v3a-reuse-ablation.json
