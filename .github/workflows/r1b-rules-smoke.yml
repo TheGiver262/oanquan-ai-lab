@@ -8,8 +8,10 @@ on:
       - ".github/workflows/r1b-rules-smoke.yml"
       - "src/research/r1b-rules-fairness.ts"
       - "src/benchmarks/r1b-rules-fairness.ts"
+      - "src/benchmarks/r1b-rules-aggregate.ts"
       - "tests/r1b-rules-fairness.test.ts"
       - "docs/r1b-rules-benchmark-protocol.md"
+      - "docs/r1b-fixed-resource-gate.md"
       - "package.json"
   workflow_dispatch:
 
@@ -37,7 +39,32 @@ jobs:
           --max-moves 4
           --seed 20260914
           --out r1b-smoke.json
+      - name: Run unresolved aggregate smoke
+        shell: bash
+        run: |
+          mkdir -p aggregate-smoke
+          for seed in 20260914 20260915; do
+            npm run benchmark:r1b:rules -- \
+              --rule both \
+              --engine-x uct \
+              --engine-y uct \
+              --assignment-mode single \
+              --limit-openings 1 \
+              --simulations 4 \
+              --rollout-depth 4 \
+              --max-moves 4 \
+              --seed "$seed" \
+              --out "aggregate-smoke/run-$seed.json"
+          done
+          npm run benchmark:r1b:aggregate -- \
+            --input-dir aggregate-smoke \
+            --stochastic true \
+            --bootstrap-samples 100 \
+            --out r1b-aggregate-smoke.json
       - uses: actions/upload-artifact@v4
         with:
           name: r1b-rules-smoke
-          path: r1b-smoke.json
+          path: |
+            r1b-smoke.json
+            r1b-aggregate-smoke.json
+            aggregate-smoke/*.json
