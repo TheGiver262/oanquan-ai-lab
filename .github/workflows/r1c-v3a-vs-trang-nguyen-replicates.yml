@@ -1,0 +1,62 @@
+name: r1c-v3a-vs-trang-nguyen-replicates
+
+on:
+  push:
+    branches:
+      - research/r1c-repeat-parity
+    paths:
+      - ".github/workflows/r1c-v3a-vs-trang-nguyen-replicates.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npx vitest run tests/engine.test.ts tests/server-production-parity.test.ts tests/puct-v3a.test.ts tests/v3-live-quan-corpus.test.ts tests/v3-balanced-midgame-corpus.test.ts
+      - run: npm run build
+
+  replicate:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        replicate: [2, 3, 4]
+        stage: [stage1, stage2, stage3]
+        matchup: [tn-null, v3a-vs-tn]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Resolve candidate
+        id: candidate
+        shell: bash
+        run: |
+          if [ "${{ matrix.matchup }}" = "tn-null" ]; then
+            echo "engine=trang-nguyen" >> "$GITHUB_OUTPUT"
+          else
+            echo "engine=v3a" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run production-envelope runtime replicate
+        run: >-
+          npx tsx src/benchmarks/r1c-v3a-vs-trang-nguyen.ts
+          --stage ${{ matrix.stage }}
+          --candidate ${{ steps.candidate.outputs.engine }}
+          --time-budget-ms 1200
+          --production-nodes 100000
+          --simulation-cap 5000000
+          --replicate ${{ matrix.replicate }}
+          --out r1c-tn-${{ matrix.stage }}-${{ matrix.matchup }}-r${{ matrix.replicate }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r1c-tn-${{ matrix.stage }}-${{ matrix.matchup }}-r${{ matrix.replicate }}
+          path: r1c-tn-${{ matrix.stage }}-${{ matrix.matchup }}-r${{ matrix.replicate }}.json
