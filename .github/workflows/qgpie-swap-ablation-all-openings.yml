@@ -1,0 +1,163 @@
+name: qgpie-swap-ablation-all-openings
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/qgpie-swap-ablation-all-openings.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  play:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1-CW
+          - B1-CCW
+          - B2-CW
+          - B2-CCW
+          - B3-CW
+          - B3-CCW
+          - B4-CW
+          - B4-CCW
+          - B5-CW
+          - B5-CCW
+        opener: [A, B]
+        policy: [auto, no-swap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run swap ablation case
+        shell: bash
+        env:
+          OPENING_SLUG: ${{ matrix.opening }}
+          OPENER: ${{ matrix.opener }}
+          POLICY: ${{ matrix.policy }}
+        run: |
+          OPENING="${OPENING_SLUG/-/:}"
+          if [ "$POLICY" = "auto" ]; then
+            MODE="quan-gia-pie-threefold"
+          else
+            MODE="quan-gia-threefold"
+          fi
+          npx tsx src/benchmarks/balance-mode-v3a-selfplay.ts \
+            --mode "$MODE" \
+            --opening "$OPENING" \
+            --opener-agent "$OPENER" \
+            --case-id "swap-ablation-${POLICY}-${OPENING_SLUG}-${OPENER}" \
+            --time-budget-ms 1200 \
+            --simulation-cap 5000000 \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qgpie-swap-${{ matrix.policy }}-${{ matrix.opening }}-${{ matrix.opener }}
+          path: result.json
+          retention-days: 3
+
+  summarize:
+    needs: play
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: qgpie-swap-*
+          path: results
+          merge-multiple: false
+      - name: Build swap-ablation summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from pathlib import Path
+
+          rows=[]
+          for p in sorted(Path('results').glob('**/result.json')):
+              r=json.loads(p.read_text())
+              case=(r.get('methodology') or {}).get('caseId','')
+              policy='no-swap' if 'swap-ablation-no-swap-' in case else 'auto'
+              rows.append((policy,r))
+
+          by=defaultdict(dict)
+          totals={p:{'games':0,'opener_win':0,'responder_win':0,'draw':0,'unresolved':0,'swap':0} for p in ('auto','no-swap')}
+          for policy,r in rows:
+              o=r['outcome']; m=r['methodology']; opening=m['openingPlayed']; opener=m['originalOpenerAgent']
+              if o['unresolved']:
+                  result='U'; totals[policy]['unresolved']+=1
+              elif o['winnerAgent'] is None:
+                  result='D'; totals[policy]['draw']+=1
+              elif o['winnerAgent']==opener:
+                  result='OW'; totals[policy]['opener_win']+=1
+              else:
+                  result='RW'; totals[policy]['responder_win']+=1
+              totals[policy]['games']+=1
+              if r['swap']['used']: totals[policy]['swap']+=1
+              by[opening][(policy,opener)]={
+                  'result':result,
+                  'winner':o['winnerAgent'],
+                  'margin':o['finalOpenerMargin'],
+                  'moves':o['boardMoves'],
+                  'swap':r['swap']['used'],
+                  'finish':o['finishReason'],
+              }
+
+          order=['B1:CW','B1:CCW','B2:CW','B2:CCW','B3:CW','B3:CCW','B4:CW','B4:CCW','B5:CW','B5:CCW']
+          lines=['# Quan Gia + Threefold: Pie SWAP ablation over all openings','',
+                 'AUTO = Quan Gia + Pie + Threefold; NO-SWAP = same board/repetition rules with Pie option removed (equivalent to forced decline of classic one-shot Pie after move 1).','',
+                 '| Opening | AUTO A opens | AUTO B opens | NO-SWAP A opens | NO-SWAP B opens | AUTO swap A/B |',
+                 '|---|---|---|---|---|---|']
+          def fmt(x):
+              if not x: return '-'
+              return f"{x['result']} m={x['margin']} n={x['moves']}"
+          for op in order:
+              d=by[op]
+              aa=d.get(('auto','A')); ab=d.get(('auto','B')); na=d.get(('no-swap','A')); nb=d.get(('no-swap','B'))
+              swaps=f"{int(bool(aa and aa['swap']))}/{int(bool(ab and ab['swap']))}"
+              lines.append(f"| {op} | {fmt(aa)} | {fmt(ab)} | {fmt(na)} | {fmt(nb)} | {swaps} |")
+          lines += ['', '## Totals', '']
+          for policy in ('auto','no-swap'):
+              t=totals[policy]
+              lines.append(f"- **{policy}**: games={t['games']}, opener wins={t['opener_win']}, responder wins={t['responder_win']}, draws={t['draw']}, unresolved={t['unresolved']}, swaps={t['swap']}")
+
+          # Opening-level transition caused by allowing Pie.
+          lines += ['', '## Opening-level AUTO vs NO-SWAP transitions', '']
+          for op in order:
+              d=by[op]
+              pairs=[]
+              for opener in ('A','B'):
+                  a=d.get(('auto',opener)); n=d.get(('no-swap',opener))
+                  if a and n: pairs.append(f"{opener}:{n['result']}→{a['result']}")
+              lines.append(f"- {op}: " + ', '.join(pairs))
+
+          Path('qgpie-swap-ablation-summary.md').write_text('\n'.join(lines)+'\n')
+          Path('qgpie-swap-ablation-summary.json').write_text(json.dumps({'totals':totals,'byOpening':by}, default=str, indent=2)+'\n')
+          print('\n'.join(lines))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qgpie-swap-ablation-summary
+          path: |
+            qgpie-swap-ablation-summary.md
+            qgpie-swap-ablation-summary.json
+          retention-days: 7
