@@ -17,7 +17,8 @@ export type BalanceModeId =
   | "delayed-pie-6-threefold"
   | "open-pie-threefold"
   | "quan-gia"
-  | "quan-gia-threefold";
+  | "quan-gia-threefold"
+  | "quan-gia-pie-threefold";
 
 export type SeatToAgent = Readonly<Record<PlayerId, ResearchAgentId>>;
 
@@ -55,7 +56,7 @@ const MATURE_QUAN_THREEFOLD_RULESET: ResolvedRuleset = Object.freeze({
 export function createBalanceInitialState(mode: BalanceModeId): BalanceState {
   const ruleset = mode === "quan-gia"
     ? MATURE_QUAN_RULESET
-    : mode === "quan-gia-threefold"
+    : mode === "quan-gia-threefold" || mode === "quan-gia-pie-threefold"
       ? MATURE_QUAN_THREEFOLD_RULESET
       : modeUsesThreefold(mode)
         ? CLASSIC_STANDARD_THREEFOLD_RULESET
@@ -74,14 +75,16 @@ export function modeUsesThreefold(mode: BalanceModeId): boolean {
     || mode === "delayed-pie-4-threefold"
     || mode === "delayed-pie-6-threefold"
     || mode === "open-pie-threefold"
-    || mode === "quan-gia-threefold";
+    || mode === "quan-gia-threefold"
+    || mode === "quan-gia-pie-threefold";
 }
 
 export function modeHasSwap(mode: BalanceModeId): boolean {
   return mode === "pie-threefold"
     || mode === "delayed-pie-4-threefold"
     || mode === "delayed-pie-6-threefold"
-    || mode === "open-pie-threefold";
+    || mode === "open-pie-threefold"
+    || mode === "quan-gia-pie-threefold";
 }
 
 export function currentAgent(state: BalanceState): ResearchAgentId {
@@ -182,7 +185,7 @@ export function cloneBalanceState(state: BalanceState): BalanceState {
 }
 
 function initialSwapState(mode: BalanceModeId): SwapState {
-  if (mode === "pie-threefold") {
+  if (mode === "pie-threefold" || mode === "quan-gia-pie-threefold") {
     return { enabled: true, used: false, responderNormalMovesTaken: 0, maxResponderNormalMovesBeforeExpiry: 1 };
   }
   if (mode === "delayed-pie-4-threefold") {
