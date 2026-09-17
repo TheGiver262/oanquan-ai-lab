@@ -1,8 +1,26 @@
-import type { ApplyMoveResult, DanPitId, Direction, GameState, MoveEvent, Pit, PitId, PlayerId, PlayerMove, ResolvedRuleset } from "./types.js";
+import type {
+  ApplyMoveResult,
+  DanPitId,
+  Direction,
+  GameState,
+  MatchFinishReason,
+  MoveEvent,
+  MoveSignature,
+  Pit,
+  PitId,
+  PlayerId,
+  PlayerMove,
+  ResolvedRuleset,
+} from "./types.js";
 
 export const CLASSIC_STANDARD_RULESET: ResolvedRuleset = Object.freeze({
   canonicalRulesetId: "oaq:classic_2p:standard:v1",
   ruleProfileId: "standard_v1",
+});
+export const CLASSIC_STANDARD_THREEFOLD_RULESET: ResolvedRuleset = Object.freeze({
+  canonicalRulesetId: "oaq:classic_2p:standard_threefold:v1",
+  ruleProfileId: "standard_v1",
+  repetitionPolicy: "threefold",
 });
 export const NO_FIRST_QUAN_RULESET: ResolvedRuleset = Object.freeze({
   canonicalRulesetId: "oaq:classic_2p:no_first_quan:v1",
@@ -107,8 +125,13 @@ export function applyMove(state: GameState, move: PlayerMove): ApplyMoveResult {
   if (!isFinished(nextState)) {
     nextState.currentPlayer = otherPlayer(move.player);
     recordRecentMove(nextState, move);
-    events.push({ type: "turn_changed", currentPlayer: nextState.currentPlayer });
-    maybeRefillSide(nextState, nextState.currentPlayer, events);
+    if (nextState.ruleset.repetitionPolicy === "threefold" && hasRepeatedMovePair(nextState.recentMoves)) {
+      collectRemainingDanOnly(nextState);
+      finishMatch(nextState, events, "repeated_moves");
+    } else {
+      events.push({ type: "turn_changed", currentPlayer: nextState.currentPlayer });
+      maybeRefillSide(nextState, nextState.currentPlayer, events);
+    }
   } else {
     recordRecentMove(nextState, move);
   }
@@ -116,6 +139,21 @@ export function applyMove(state: GameState, move: PlayerMove): ApplyMoveResult {
   nextState.skipCounts[move.player] = { ...nextState.skipCounts[move.player], consecutive: 0 };
   events.unshift({ type: "move_accepted", player: move.player, pit: move.pit, dir: move.dir });
   return { ok: true, state: nextState, events };
+}
+
+export function hasRepeatedMovePair(recentMoves: readonly MoveSignature[]): boolean {
+  if (recentMoves.length < 6) return false;
+  const moves = recentMoves.slice(-6);
+  const [a0, b0, a1, b1, a2, b2] = moves;
+  return Boolean(
+    a0 && b0 && a1 && b1 && a2 && b2
+    && sameMove(a0, a1) && sameMove(a0, a2)
+    && sameMove(b0, b1) && sameMove(b0, b2)
+  );
+}
+
+function sameMove(left: MoveSignature, right: MoveSignature): boolean {
+  return left.player === right.player && left.pit === right.pit && left.dir === right.dir;
 }
 
 function getQuanCaptureDecision(state: GameState, pit: Pit): "capture" | "stop" | "forbidden" {
@@ -181,7 +219,18 @@ function collectRemaining(state: GameState): void {
   }
 }
 
-function finishMatch(state: GameState, events: MoveEvent[], reason: "both_quan_empty" | "no_refill", forcedWinner?: PlayerId): void {
+function collectRemainingDanOnly(state: GameState): void {
+  for (const player of ["P0", "P1"] as const) {
+    for (const pitId of PLAYER_PITS[player]) {
+      const pit = state.pits[pitIndex(state, pitId)];
+      if (!pit) continue;
+      state.scores[player] += pit.stones;
+      pit.stones = 0;
+    }
+  }
+}
+
+function finishMatch(state: GameState, events: MoveEvent[], reason: MatchFinishReason, forcedWinner?: PlayerId): void {
   state.status = "finished";
   state.winner = forcedWinner ?? (state.scores.P0 === state.scores.P1 ? null : state.scores.P0 > state.scores.P1 ? "P0" : "P1");
   events.push({ type: "match_finished", winner: state.winner, reason });
@@ -189,7 +238,13 @@ function finishMatch(state: GameState, events: MoveEvent[], reason: "both_quan_e
 
 function isFinished(state: GameState): boolean { return state.status === "finished"; }
 function cloneState(state: GameState): GameState {
-  return { ...state, pits: state.pits.map((p) => ({ ...p })), scores: { ...state.scores }, skipCounts: { P0: { ...state.skipCounts.P0 }, P1: { ...state.skipCounts.P1 } }, recentMoves: state.recentMoves.map((m) => ({ ...m })) };
+  return {
+    ...state,
+    pits: state.pits.map((p) => ({ ...p })),
+    scores: { ...state.scores },
+    skipCounts: { P0: { ...state.skipCounts.P0 }, P1: { ...state.skipCounts.P1 } },
+    recentMoves: state.recentMoves.map((m) => ({ ...m })),
+  };
 }
 function recordRecentMove(state: GameState, move: PlayerMove): void { state.recentMoves = [...state.recentMoves, { ...move }].slice(-6); }
 function pitIndex(state: GameState, id: PitId): number { return state.pits.findIndex((p) => p.id === id); }
@@ -202,6 +257,7 @@ export function createStateHash(state: GameState): string {
   const stable = {
     rulesetId: state.rulesetId,
     rulesetCanonicalId: state.ruleset.canonicalRulesetId,
+    repetitionPolicy: state.ruleset.repetitionPolicy ?? "none",
     pits: state.pits.map((pit) => [pit.id, pit.kind, pit.owner, pit.stones, pit.quanStones]),
     currentPlayer: state.currentPlayer,
     scores: { P0: state.scores.P0, P1: state.scores.P1 },
@@ -217,6 +273,9 @@ export function createStateHash(state: GameState): string {
   };
   let hash = 0x811c9dc5;
   const value = JSON.stringify(stable);
-  for (let i = 0; i < value.length; i += 1) { hash ^= value.charCodeAt(i); hash = Math.imul(hash, 0x01000193); }
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
