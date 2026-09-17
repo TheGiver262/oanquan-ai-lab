@@ -5,10 +5,12 @@ export type DanPitId = "B1" | "B2" | "B3" | "B4" | "B5" | "T1" | "T2" | "T3" | "
 export type QuanPitId = "L" | "R";
 export type PitId = DanPitId | QuanPitId;
 export type RuleProfileId = "standard_v1" | "no_first_quan_v1" | "mature_quan_v1";
+export type RepetitionPolicy = "none" | "threefold";
 
 export type ResolvedRuleset = Readonly<{
   canonicalRulesetId: string;
   ruleProfileId: RuleProfileId;
+  repetitionPolicy?: RepetitionPolicy;
 }>;
 
 export type Pit = {
@@ -35,6 +37,7 @@ export type GameState = {
 };
 
 export type PlayerMove = MoveSignature;
+export type MatchFinishReason = "both_quan_empty" | "no_refill" | "repeated_moves";
 
 export type MoveEvent =
   | { type: "stones_picked"; player: PlayerId; pit: DanPitId; count: number }
@@ -43,7 +46,7 @@ export type MoveEvent =
   | { type: "side_refilled"; player: PlayerId }
   | { type: "move_accepted"; player: PlayerId; pit: DanPitId; dir: Direction }
   | { type: "turn_changed"; currentPlayer: PlayerId }
-  | { type: "match_finished"; winner: PlayerId | null; reason: "both_quan_empty" | "no_refill" };
+  | { type: "match_finished"; winner: PlayerId | null; reason: MatchFinishReason };
 
 export type ApplyMoveResult =
   | { ok: true; state: GameState; events: MoveEvent[] }
