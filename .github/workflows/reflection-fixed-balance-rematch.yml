@@ -1,0 +1,181 @@
+name: reflection-fixed-balance-rematch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/reflection-fixed-balance-rematch.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  play:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - quan-gia-threefold
+          - quan-gia-pie-threefold
+          - pie-threefold
+        opening:
+          - B1-CW
+          - B1-CCW
+          - B2-CW
+          - B2-CCW
+          - B3-CW
+          - B3-CCW
+          - B4-CW
+          - B4-CCW
+          - B5-CW
+          - B5-CCW
+        opener_agent:
+          - A
+          - B
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run reflection-fixed paired case
+        shell: bash
+        run: |
+          OPENING='${{ matrix.opening }}'
+          OPENING="${OPENING/-/:}"
+          npx tsx src/benchmarks/balance-mode-v3a-selfplay.ts \
+            --mode '${{ matrix.mode }}' \
+            --opening "$OPENING" \
+            --opener-agent '${{ matrix.opener_agent }}' \
+            --case-id 'reflection-fixed-${{ matrix.mode }}-${{ matrix.opening }}-${{ matrix.opener_agent }}' \
+            --fixed-simulations 20000 \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rf-${{ matrix.mode }}-${{ matrix.opening }}-${{ matrix.opener_agent }}
+          path: result.json
+          retention-days: 3
+
+  summarize:
+    needs: play
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rf-*
+          path: results
+          merge-multiple: false
+      - name: Build reflection-fixed balance summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from pathlib import Path
+
+          rows=[json.loads(p.read_text()) for p in sorted(Path('results').glob('**/result.json'))]
+          modes=['quan-gia-threefold','quan-gia-pie-threefold','pie-threefold']
+          openings=[f'B{i}:{d}' for i in range(1,6) for d in ('CW','CCW')]
+          mirror={'B1:CW':'B5:CCW','B5:CCW':'B1:CW','B1:CCW':'B5:CW','B5:CW':'B1:CCW',
+                  'B2:CW':'B4:CCW','B4:CCW':'B2:CW','B2:CCW':'B4:CW','B4:CW':'B2:CCW',
+                  'B3:CW':'B3:CCW','B3:CCW':'B3:CW'}
+          mirror_classes=[('B1:CW','B5:CCW'),('B1:CCW','B5:CW'),('B2:CW','B4:CCW'),('B2:CCW','B4:CW'),('B3:CW','B3:CCW')]
+
+          index={}
+          for r in rows:
+              index[(r['mode'],r['methodology']['openingPlayed'],r['methodology']['originalOpenerAgent'])]=r
+
+          def label(r):
+              o=r['outcome']
+              if o['unresolved']: return 'U'
+              if o['winnerAgent'] is None: return 'D'
+              return 'OW' if o['openerAgentValue']==1 else 'RW'
+
+          def exact_signature(r):
+              return (label(r),r['outcome']['finalOpenerMargin'],r['outcome']['boardMoves'],r['outcome']['finishReason'],
+                      bool(r['swap']['used']),r['swap']['atBoardMove'])
+
+          report={'games':len(rows),'fixedSimulations':20000,'maxBoardMoves':240,'modes':{}}
+          md=['# Reflection-fixed balance rematch','',
+              'Reflection-canonical ModeAwarePuctV3A; fixed 20,000 simulations per decision (unless exact root solved earlier); no wall-clock cutoff; 240 board-move censor cap.','']
+
+          for mode in modes:
+              mode_rows=[r for r in rows if r['mode']==mode]
+              totals={'opener_wins':0,'responder_wins':0,'draws':0,'unresolved':0,'threefold_finishes':0,'swap_used':0}
+              for r in mode_rows:
+                  l=label(r)
+                  if l=='OW': totals['opener_wins']+=1
+                  elif l=='RW': totals['responder_wins']+=1
+                  elif l=='D': totals['draws']+=1
+                  else: totals['unresolved']+=1
+                  totals['threefold_finishes']+=int(r['outcome']['finishReason']=='repeated_moves')
+                  totals['swap_used']+=int(r['swap']['used'])
+
+              identity_disagreements=[]
+              for op in openings:
+                  a=index.get((mode,op,'A')); b=index.get((mode,op,'B'))
+                  if a and b and label(a)!=label(b): identity_disagreements.append(op)
+
+              mirror_mismatches=[]
+              for left,right in mirror_classes:
+                  for agent in ('A','B'):
+                      l=index.get((mode,left,agent)); rr=index.get((mode,right,agent))
+                      if not l or not rr or exact_signature(l)!=exact_signature(rr):
+                          mirror_mismatches.append({'left':left,'right':right,'openerAgent':agent,
+                                                    'leftSig':None if not l else exact_signature(l),
+                                                    'rightSig':None if not rr else exact_signature(rr)})
+
+              md += [f'## {mode}','',
+                     f"- Games: {len(mode_rows)}/20",
+                     f"- Opener wins: {totals['opener_wins']}",
+                     f"- Responder wins: {totals['responder_wins']}",
+                     f"- Draws: {totals['draws']}",
+                     f"- Unresolved: {totals['unresolved']}",
+                     f"- Threefold finishes: {totals['threefold_finishes']}",
+                     f"- SWAP used: {totals['swap_used']}/20",
+                     f"- Identity-result disagreements: {len(identity_disagreements)}/10",
+                     f"- Reflection exact mismatches: {len(mirror_mismatches)}/10",
+                     '',
+                     '| Opening | A opens | B opens | Margin A/B | Moves A/B | Swap A/B | Finish A/B |',
+                     '|---|---|---|---|---|---|---|']
+              opening_data={}
+              for op in openings:
+                  a=index.get((mode,op,'A')); b=index.get((mode,op,'B'))
+                  if not a or not b:
+                      md.append(f'| {op} | missing | missing | - | - | - | - |')
+                      continue
+                  md.append(f"| {op} | {label(a)} | {label(b)} | {a['outcome']['finalOpenerMargin']}/{b['outcome']['finalOpenerMargin']} | {a['outcome']['boardMoves']}/{b['outcome']['boardMoves']} | {int(a['swap']['used'])}/{int(b['swap']['used'])} | {a['outcome']['finishReason']}/{b['outcome']['finishReason']} |")
+                  opening_data[op]={'A':a,'B':b}
+              md.append('')
+              report['modes'][mode]={'totals':totals,'identityResultDisagreements':identity_disagreements,
+                                     'reflectionExactMismatches':mirror_mismatches,'openings':opening_data}
+
+          all_symmetry_clean=all(not report['modes'][m]['reflectionExactMismatches'] for m in modes)
+          report['allReflectionChecksPass']=all_symmetry_clean
+          md += ['## Benchmark integrity','',f"Reflection checks across all three modes: {'PASS' if all_symmetry_clean else 'FAIL'}",'']
+          Path('reflection-fixed-balance-summary.json').write_text(json.dumps(report,indent=2)+'\n')
+          Path('reflection-fixed-balance-summary.md').write_text('\n'.join(md)+'\n')
+          print('\n'.join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reflection-fixed-balance-summary
+          path: |
+            reflection-fixed-balance-summary.md
+            reflection-fixed-balance-summary.json
+          retention-days: 7
