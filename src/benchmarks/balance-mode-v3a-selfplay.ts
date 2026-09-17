@@ -25,6 +25,7 @@ const responderAgent: ResearchAgentId = openerAgent === "A" ? "B" : "A";
 const caseId = stringArg("--case-id");
 const timeBudgetMs = intArg("--time-budget-ms", 1_200);
 const simulationCap = intArg("--simulation-cap", 5_000_000);
+const fixedSimulations = optionalPositiveIntArg("--fixed-simulations");
 const maxBoardMoves = intArg("--max-board-moves", 160);
 const outPath = stringArg("--out");
 
@@ -101,7 +102,7 @@ const finalOpenerScore = state.game.scores[finalOpenerSeat];
 const finalResponderScore = state.game.scores[finalResponderSeat];
 
 const result = {
-  experiment: "balance-mode-v3a-selfplay-v3-paired-seats",
+  experiment: "balance-mode-v3a-selfplay-v4-reflection-fixed",
   evidenceClass: openingRequest === "auto" ? "v3a-root-selected-selfplay" : "v3a-all-opening-paired-seat-confirmation",
   mode,
   ruleset: state.game.ruleset.canonicalRulesetId,
@@ -114,16 +115,21 @@ const result = {
     initialSeatMapping: { P0: openerAgent, P1: responderAgent },
     perspective: "agent identity follows seat ownership through SWAP",
     unresolved: "censored at maxBoardMoves; never heuristic-adjudicated",
-    search: "same frozen mode-aware PUCT V3A implementation for both agents",
-    openingFilter: "none: paired-seat run enumerates every legal first move B1..B5 in both directions",
+    search: fixedSimulations === null
+      ? "same reflection-canonical mode-aware PUCT V3A implementation for both agents; wall-clock budget enabled"
+      : "same reflection-canonical mode-aware PUCT V3A implementation for both agents; fixed simulation budget with no wall-clock cutoff",
+    openingFilter: "none: paired-seat run enumerates every requested legal first move",
   },
   config: {
-    timeBudgetMs,
-    simulationCap,
+    searchMode: fixedSimulations === null ? "time-budget" : "fixed-simulations",
+    fixedSimulations,
+    timeBudgetMs: fixedSimulations === null ? timeBudgetMs : null,
+    simulationCap: fixedSimulations === null ? simulationCap : fixedSimulations,
     maxBoardMoves,
     puctExploration: 1.5,
     policyTemperature: 0.6,
     rootNoise: false,
+    reflectionCanonicalization: true,
   },
   outcome: {
     unresolved,
@@ -165,9 +171,13 @@ console.log(json);
 
 function chooseForCurrent(target: BalanceState): ModeAwarePuctV3ADecision {
   const agent = currentAgent(target);
-  const decision = engines[agent].chooseAction(target, {
+  const decision = engines[agent].chooseAction(target, fixedSimulations === null ? {
     simulations: simulationCap,
     timeBudgetMs,
+    puctExploration: 1.5,
+    policyTemperature: 0.6,
+  } : {
+    simulations: fixedSimulations,
     puctExploration: 1.5,
     policyTemperature: 0.6,
   });
@@ -284,10 +294,14 @@ function stringArg(name: string): string | null {
   return index >= 0 ? process.argv[index + 1] ?? null : null;
 }
 
-function intArg(name: string, fallback: number): number {
+function optionalPositiveIntArg(name: string): number | null {
   const raw = stringArg(name);
-  if (raw === null) return fallback;
+  if (raw === null) return null;
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
   return value;
+}
+
+function intArg(name: string, fallback: number): number {
+  return optionalPositiveIntArg(name) ?? fallback;
 }
