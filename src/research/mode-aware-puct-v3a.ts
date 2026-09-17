@@ -1,5 +1,5 @@
 import { otherPlayer } from "../engine.js";
-import type { GameState, PlayerId } from "../types.js";
+import type { DanPitId, Direction, GameState, PitId, PlayerId } from "../types.js";
 import {
   applyBalanceAction,
   balanceActionKey,
@@ -64,6 +64,21 @@ const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
 const REAL_ACTION_REUSE_PLIES = 2;
 
+const REFLECT_PIT: Readonly<Record<PitId, PitId>> = Object.freeze({
+  L: "R",
+  R: "L",
+  T1: "T5",
+  T2: "T4",
+  T3: "T3",
+  T4: "T2",
+  T5: "T1",
+  B1: "B5",
+  B2: "B4",
+  B3: "B3",
+  B4: "B2",
+  B5: "B1",
+});
+
 /**
  * PUCT V3A adapted to product-mode state.
  *
@@ -73,9 +88,10 @@ const REAL_ACTION_REUSE_PLIES = 2;
  * - conservative exact terminal W/D/L propagation;
  * - cycle cutoff without declaring a draw.
  *
- * The only semantic change is perspective. The engine owns research agent A/B,
- * not a fixed logical seat P0/P1. This is required for Pie variants because a
- * SWAP changes seat ownership without changing the board or logical side to move.
+ * Product-mode search additionally canonicalizes the left/right reflection of
+ * every externally supplied root. This removes arbitrary B1->B5 / CW->CCW
+ * action-order bias from mirrored positions while leaving the underlying PUCT
+ * selection, heuristic and exact terminal propagation unchanged.
  */
 export class ModeAwarePuctV3A {
   private engineAgent: ResearchAgentId | null = null;
@@ -88,14 +104,16 @@ export class ModeAwarePuctV3A {
 
   chooseAction(state: BalanceState, options: ModeAwarePuctV3AOptions = {}): ModeAwarePuctV3ADecision {
     const started = performance.now();
-    if (this.engineAgent === null) this.engineAgent = currentAgent(state);
-    if (currentAgent(state) !== this.engineAgent) {
-      throw new Error(`Mode-aware PUCT V3A session belongs to agent ${this.engineAgent}, received ${currentAgent(state)}`);
+    const canonical = canonicalizeBalanceStateForSearch(state);
+    const searchState = canonical.state;
+    if (this.engineAgent === null) this.engineAgent = currentAgent(searchState);
+    if (currentAgent(searchState) !== this.engineAgent) {
+      throw new Error(`Mode-aware PUCT V3A session belongs to agent ${this.engineAgent}, received ${currentAgent(searchState)}`);
     }
 
-    const sync = this.syncRoot(state);
+    const sync = this.syncRoot(searchState);
     const root = sync.root;
-    const legalActions = getBalanceActions(state);
+    const legalActions = getBalanceActions(searchState);
     if (legalActions.length === 0) {
       return {
         action: null,
@@ -185,8 +203,10 @@ export class ModeAwarePuctV3A {
     }
 
     const rankedChildren = this.rankRootChildren(root);
+    const toCaller = (action: BalanceAction): BalanceAction => canonical.reflected ? reflectBalanceAction(action) : action;
+    const selected = rankedChildren[0]?.action ?? legalActions[0] ?? null;
     return {
-      action: rankedChildren[0]?.action ?? legalActions[0] ?? null,
+      action: selected ? toCaller(selected) : null,
       diagnostics: {
         simulations,
         elapsedMs: performance.now() - started,
@@ -199,7 +219,7 @@ export class ModeAwarePuctV3A {
         solvedRoot: root.solvedOutcome,
       },
       rootStats: rankedChildren.map((child) => ({
-        action: child.action as BalanceAction,
+        action: toCaller(child.action as BalanceAction),
         visits: child.visits,
         meanValue: child.visits > 0 ? child.valueSum / child.visits : 0,
         prior: child.prior,
@@ -309,6 +329,61 @@ export class ModeAwarePuctV3A {
       return right.prior - left.prior;
     });
   }
+}
+
+export function reflectBalanceAction(action: BalanceAction): BalanceAction {
+  if (action.kind === "swap") return { ...action };
+  return {
+    kind: "move",
+    move: {
+      ...action.move,
+      pit: reflectDanPitId(action.move.pit),
+      dir: reflectDirection(action.move.dir),
+    },
+  };
+}
+
+export function reflectBalanceStateForSearch(state: BalanceState): BalanceState {
+  const byId = new Map(state.game.pits.map((pit) => [pit.id, pit] as const));
+  const pits = state.game.pits.map((targetPit) => {
+    const source = byId.get(reflectPitId(targetPit.id));
+    if (!source) throw new Error(`Reflection source missing for pit ${targetPit.id}`);
+    return { ...source, id: targetPit.id };
+  });
+  const recentMoves = state.game.recentMoves.map((move) => ({
+    ...move,
+    pit: reflectDanPitId(move.pit),
+    dir: reflectDirection(move.dir),
+  }));
+  return {
+    ...state,
+    game: {
+      ...state.game,
+      pits,
+      recentMoves,
+    },
+  };
+}
+
+export function canonicalizeBalanceStateForSearch(state: BalanceState): { state: BalanceState; reflected: boolean } {
+  const reflected = reflectBalanceStateForSearch(state);
+  const directKey = strategicBalanceStateKey(state);
+  const reflectedKey = strategicBalanceStateKey(reflected);
+  return reflectedKey < directKey
+    ? { state: reflected, reflected: true }
+    : { state, reflected: false };
+}
+
+function reflectPitId(id: PitId): PitId {
+  return REFLECT_PIT[id];
+}
+
+function reflectDanPitId(id: DanPitId): DanPitId {
+  return REFLECT_PIT[id] as DanPitId;
+}
+
+function reflectDirection(direction: Direction): Direction {
+  return direction === "CW" ? "CCW" : "CW";
 }
 
 function makeNode(
