@@ -1,0 +1,192 @@
+name: quan-gia-pie-threefold-paired-all-openings
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/quan-gia-pie-threefold-paired-all-openings.yml"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  play:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        opening:
+          - B1-CW
+          - B1-CCW
+          - B2-CW
+          - B2-CCW
+          - B3-CW
+          - B3-CCW
+          - B4-CW
+          - B4-CCW
+          - B5-CW
+          - B5-CCW
+        opener_agent:
+          - A
+          - B
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run paired opening case
+        shell: bash
+        run: |
+          OPENING='${{ matrix.opening }}'
+          OPENING="${OPENING/-/:}"
+          npx tsx src/benchmarks/balance-mode-v3a-selfplay.ts \
+            --mode quan-gia-pie-threefold \
+            --opening "$OPENING" \
+            --opener-agent '${{ matrix.opener_agent }}' \
+            --case-id 'paired-${{ matrix.opening }}-${{ matrix.opener_agent }}' \
+            --time-budget-ms 1200 \
+            --simulation-cap 5000000 \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qgpie-paired-${{ matrix.opening }}-${{ matrix.opener_agent }}
+          path: result.json
+          retention-days: 3
+
+  summarize:
+    needs: play
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: qgpie-paired-*
+          path: results
+          merge-multiple: false
+      - name: Build paired-opening summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from pathlib import Path
+
+          rows=[]
+          for p in sorted(Path('results').glob('**/result.json')):
+              rows.append(json.loads(p.read_text()))
+
+          by_opening=defaultdict(list)
+          totals={'opener_wins':0,'responder_wins':0,'draws':0,'unresolved':0,'swap_used':0}
+          for r in rows:
+              opening=r['methodology']['openingPlayed']
+              by_opening[opening].append(r)
+              o=r['outcome']
+              if o['unresolved']:
+                  totals['unresolved'] += 1
+              elif o['winnerAgent'] is None:
+                  totals['draws'] += 1
+              elif o['openerAgentValue'] == 1:
+                  totals['opener_wins'] += 1
+              else:
+                  totals['responder_wins'] += 1
+              totals['swap_used'] += int(r['swap']['used'])
+
+          def outcome_label(r):
+              o=r['outcome']
+              if o['unresolved']:
+                  return 'U'
+              if o['winnerAgent'] is None:
+                  return 'D'
+              return 'O' if o['openerAgentValue'] == 1 else 'R'
+
+          opening_order=[f'B{i}:{d}' for i in range(1,6) for d in ('CW','CCW')]
+          lines=[
+              '# Quan Gia + Pie + Threefold — all openings paired-seat test',
+              '',
+              'Frozen mode-aware PUCT V3A on both sides; 1200 ms/decision; 5,000,000 simulation cap; 240 board-move censor cap.',
+              '',
+              '| Opening | A opens | B opens | Pair result | Both draw | Swap A-open/B-open | Moves A/B | Opener margin A/B |',
+              '|---|---|---|---|---:|---|---|---|',
+          ]
+          pair_draws=0
+          identity_disagreements=0
+          pair_details={}
+          for opening in opening_order:
+              pair=by_opening.get(opening, [])
+              amap={r['methodology']['originalOpenerAgent']:r for r in pair}
+              a=amap.get('A'); b=amap.get('B')
+              if not a or not b:
+                  lines.append(f'| {opening} | missing | missing | incomplete | 0 | - | - | - |')
+                  pair_details[opening]={'complete':False}
+                  continue
+              la,lb=outcome_label(a),outcome_label(b)
+              both_draw=(la=='D' and lb=='D')
+              pair_draws += int(both_draw)
+              identity_disagreements += int(la != lb)
+              if both_draw:
+                  pair_result='DRAW/DRAW'
+              elif la==lb:
+                  pair_result=f'{la}/{lb}'
+              else:
+                  pair_result=f'{la}/{lb} (identity variance)'
+              lines.append(
+                  f"| {opening} | {la} | {lb} | {pair_result} | {int(both_draw)} | "
+                  f"{int(a['swap']['used'])}/{int(b['swap']['used'])} | "
+                  f"{a['outcome']['boardMoves']}/{b['outcome']['boardMoves']} | "
+                  f"{a['outcome']['finalOpenerMargin']}/{b['outcome']['finalOpenerMargin']} |"
+              )
+              pair_details[opening]={
+                  'complete':True,
+                  'A_opens':a,
+                  'B_opens':b,
+                  'labels':[la,lb],
+                  'both_draw':both_draw,
+              }
+
+          all_draw=(len(rows)==20 and totals['draws']==20 and totals['unresolved']==0)
+          lines += [
+              '',
+              f"Games: {len(rows)}/20",
+              f"Opener wins: {totals['opener_wins']}",
+              f"Responder wins: {totals['responder_wins']}",
+              f"Draws: {totals['draws']}",
+              f"Unresolved: {totals['unresolved']}",
+              f"SWAP used: {totals['swap_used']}/20",
+              f"Opening pairs with DRAW/DRAW: {pair_draws}/10",
+              f"Opening pairs with identity-result disagreement: {identity_disagreements}/10",
+              f"Strict all-games-draw criterion: {'PASS' if all_draw else 'FAIL'}",
+          ]
+          summary={
+              'mode':'quan-gia-pie-threefold',
+              'games':len(rows),
+              'totals':totals,
+              'draw_draw_pairs':pair_draws,
+              'identity_result_disagreements':identity_disagreements,
+              'strict_all_games_draw':all_draw,
+              'pairs':pair_details,
+          }
+          Path('qgpie-paired-all-openings-summary.md').write_text('\n'.join(lines)+'\n')
+          Path('qgpie-paired-all-openings-summary.json').write_text(json.dumps(summary, indent=2)+'\n')
+          print('\n'.join(lines))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qgpie-paired-all-openings-summary
+          path: |
+            qgpie-paired-all-openings-summary.md
+            qgpie-paired-all-openings-summary.json
+          retention-days: 7
