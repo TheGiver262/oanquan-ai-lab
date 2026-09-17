@@ -6,7 +6,7 @@ import {
   getLegalMoves,
   MATURE_QUAN_RULESET,
 } from "../engine.js";
-import type { GameState, MoveEvent, PlayerId, PlayerMove } from "../types.js";
+import type { GameState, MoveEvent, PlayerId, PlayerMove, ResolvedRuleset } from "../types.js";
 
 export type ResearchAgentId = "A" | "B";
 
@@ -16,7 +16,8 @@ export type BalanceModeId =
   | "delayed-pie-4-threefold"
   | "delayed-pie-6-threefold"
   | "open-pie-threefold"
-  | "quan-gia";
+  | "quan-gia"
+  | "quan-gia-threefold";
 
 export type SeatToAgent = Readonly<Record<PlayerId, ResearchAgentId>>;
 
@@ -45,13 +46,20 @@ export type BalanceApplyResult =
   | Readonly<{ ok: false; error: string }>;
 
 const INITIAL_MAPPING: SeatToAgent = Object.freeze({ P0: "A", P1: "B" });
+const MATURE_QUAN_THREEFOLD_RULESET: ResolvedRuleset = Object.freeze({
+  ...MATURE_QUAN_RULESET,
+  canonicalRulesetId: "oaq:classic_2p:mature_quan_threefold:v1",
+  repetitionPolicy: "threefold",
+});
 
 export function createBalanceInitialState(mode: BalanceModeId): BalanceState {
   const ruleset = mode === "quan-gia"
     ? MATURE_QUAN_RULESET
-    : modeUsesThreefold(mode)
-      ? CLASSIC_STANDARD_THREEFOLD_RULESET
-      : CLASSIC_STANDARD_RULESET;
+    : mode === "quan-gia-threefold"
+      ? MATURE_QUAN_THREEFOLD_RULESET
+      : modeUsesThreefold(mode)
+        ? CLASSIC_STANDARD_THREEFOLD_RULESET
+        : CLASSIC_STANDARD_RULESET;
 
   return {
     mode,
@@ -65,7 +73,8 @@ export function modeUsesThreefold(mode: BalanceModeId): boolean {
   return mode === "pie-threefold"
     || mode === "delayed-pie-4-threefold"
     || mode === "delayed-pie-6-threefold"
-    || mode === "open-pie-threefold";
+    || mode === "open-pie-threefold"
+    || mode === "quan-gia-threefold";
 }
 
 export function modeHasSwap(mode: BalanceModeId): boolean {
