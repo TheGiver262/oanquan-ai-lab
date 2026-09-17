@@ -1,0 +1,78 @@
+name: storage-cleanup-once
+
+on:
+  push:
+    branches:
+      - research/r1d-production-semantics
+    paths:
+      - ".github/workflows/storage-cleanup-once.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Delete obsolete completed workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Preserving canonical/final evidence workflows and the newest 5 CI runs."
+
+          declare -A KEEP_CI=()
+          while IFS=$'\t' read -r id name run_number created_at; do
+            [[ -z "${id:-}" ]] && continue
+            KEEP_CI["$id"]=1
+          done < <(
+            gh api --paginate -X GET "repos/$REPO/actions/runs?per_page=100&status=completed" \
+              --jq '.workflow_runs[] | select(.name == "ci") | [.id,.name,.run_number,.created_at] | @tsv' \
+              | sort -t$'\t' -k4,4r \
+              | head -n 5
+          )
+
+          deleted=0
+          kept=0
+          while IFS=$'\t' read -r id name run_number created_at; do
+            [[ -z "${id:-}" ]] && continue
+
+            case "$name" in
+              r1a-production-parity|\
+              r1c-repeat-parity-eval|\
+              r1c-repeat-corpus-audit|\
+              r1c-wallclock-600ms-gate|\
+              r1c-wallclock-600ms-replicates|\
+              r1c-v3a-vs-trang-nguyen-gate|\
+              r1c-v3a-vs-trang-nguyen-replicates|\
+              r1d-production-semantics-tn-gate|\
+              r1d-production-semantics-tn-replicates)
+                echo "KEEP canonical: $id  $name  #$run_number  $created_at"
+                kept=$((kept+1))
+                continue
+                ;;
+              ci)
+                if [[ -n "${KEEP_CI[$id]:-}" ]]; then
+                  echo "KEEP recent CI: $id  $name  #$run_number  $created_at"
+                  kept=$((kept+1))
+                  continue
+                fi
+                ;;
+            esac
+
+            echo "DELETE obsolete run: $id  $name  #$run_number  $created_at"
+            gh api -X DELETE "repos/$REPO/actions/runs/$id"
+            deleted=$((deleted+1))
+            sleep 0.15
+          done < <(
+            gh api --paginate -X GET "repos/$REPO/actions/runs?per_page=100&status=completed" \
+              --jq '.workflow_runs[] | [.id,.name,.run_number,.created_at] | @tsv'
+          )
+
+          echo "Cleanup complete: deleted=$deleted kept=$kept"
