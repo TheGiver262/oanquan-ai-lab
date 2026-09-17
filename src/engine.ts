@@ -257,7 +257,6 @@ export function createStateHash(state: GameState): string {
   const stable = {
     rulesetId: state.rulesetId,
     rulesetCanonicalId: state.ruleset.canonicalRulesetId,
-    repetitionPolicy: state.ruleset.repetitionPolicy ?? "none",
     pits: state.pits.map((pit) => [pit.id, pit.kind, pit.owner, pit.stones, pit.quanStones]),
     currentPlayer: state.currentPlayer,
     scores: { P0: state.scores.P0, P1: state.scores.P1 },
