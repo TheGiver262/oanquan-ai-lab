@@ -20,13 +20,15 @@ import {
 
 const mode = readMode("--mode");
 const openingRequest = stringArg("--opening") ?? "auto";
+const openerAgent = readAgent("--opener-agent", "A");
+const responderAgent: ResearchAgentId = openerAgent === "A" ? "B" : "A";
 const caseId = stringArg("--case-id");
 const timeBudgetMs = intArg("--time-budget-ms", 1_200);
 const simulationCap = intArg("--simulation-cap", 5_000_000);
 const maxBoardMoves = intArg("--max-board-moves", 160);
 const outPath = stringArg("--out");
 
-let state = createBalanceInitialState(mode);
+let state = createBalanceInitialState(mode, openerAgent);
 const engines: Record<ResearchAgentId, ModeAwarePuctV3A> = {
   A: new ModeAwarePuctV3A(),
   B: new ModeAwarePuctV3A(),
@@ -81,28 +83,39 @@ while (state.game.status === "playing" && state.game.moveNumber < maxBoardMoves)
 
 const unresolved = state.game.status !== "finished";
 const winningAgent = unresolved ? null : winnerAgent(state);
-const openerAgentValue = unresolved ? null : winningAgent === null ? 0 : winningAgent === "A" ? 1 : -1;
+const openerAgentValue = unresolved
+  ? null
+  : winningAgent === null
+    ? 0
+    : winningAgent === openerAgent
+      ? 1
+      : -1;
 const openerScore = openerAgentValue === null ? null : (openerAgentValue + 1) / 2;
 const seatA = seatForAgent(state, "A");
 const seatB = seatForAgent(state, "B");
 const finalScoreA = state.game.scores[seatA];
 const finalScoreB = state.game.scores[seatB];
+const finalOpenerSeat = seatForAgent(state, openerAgent);
+const finalResponderSeat = seatForAgent(state, responderAgent);
+const finalOpenerScore = state.game.scores[finalOpenerSeat];
+const finalResponderScore = state.game.scores[finalResponderSeat];
 
 const result = {
-  experiment: "balance-mode-v3a-selfplay-v2-confirmation20",
-  evidenceClass: openingRequest === "auto" ? "v3a-root-selected-selfplay" : "v3a-competitive-opening-confirmation",
+  experiment: "balance-mode-v3a-selfplay-v3-paired-seats",
+  evidenceClass: openingRequest === "auto" ? "v3a-root-selected-selfplay" : "v3a-all-opening-paired-seat-confirmation",
   mode,
   ruleset: state.game.ruleset.canonicalRulesetId,
   methodology: {
     caseId,
     openingRequest,
     openingPlayed,
-    originalOpenerAgent: "A",
-    originalResponderAgent: "B",
+    originalOpenerAgent: openerAgent,
+    originalResponderAgent: responderAgent,
+    initialSeatMapping: { P0: openerAgent, P1: responderAgent },
     perspective: "agent identity follows seat ownership through SWAP",
     unresolved: "censored at maxBoardMoves; never heuristic-adjudicated",
     search: "same frozen mode-aware PUCT V3A implementation for both agents",
-    openingFilter: "confirmation corpus removes only previously demonstrated large opener-loss openings; opener-winning openings are retained as balance counterexamples",
+    openingFilter: "none: paired-seat run enumerates every legal first move B1..B5 in both directions",
   },
   config: {
     timeBudgetMs,
@@ -122,6 +135,9 @@ const result = {
     finalScoreA,
     finalScoreB,
     finalScoreMarginA: finalScoreA - finalScoreB,
+    finalOpenerScore,
+    finalResponderScore,
+    finalOpenerMargin: finalOpenerScore - finalResponderScore,
     boardMoves: state.game.moveNumber,
     protocolDecisions,
     finalSeatMapping: state.seatToAgent,
@@ -129,6 +145,7 @@ const result = {
   swap: {
     enabled: state.swap.enabled,
     used: swapUsed,
+    responderAgent: state.swap.responderAgent,
     atBoardMove: swapAtBoardMove,
     afterResponderNormalMoves: swapAtResponderNormalMoves,
     finalResponderNormalMovesTaken: state.swap.responderNormalMovesTaken,
@@ -254,6 +271,12 @@ function readMode(name: string): BalanceModeId {
   ];
   if (allowed.includes(value as BalanceModeId)) return value as BalanceModeId;
   throw new Error(`${name} must be one of ${allowed.join("|")}`);
+}
+
+function readAgent(name: string, fallback: ResearchAgentId): ResearchAgentId {
+  const value = stringArg(name) ?? fallback;
+  if (value === "A" || value === "B") return value;
+  throw new Error(`${name} must be A or B`);
 }
 
 function stringArg(name: string): string | null {
