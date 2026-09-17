@@ -47,6 +47,27 @@ describe("balance mode semantics", () => {
     expect(isSwapEligible(state)).toBe(false);
   });
 
+  it("gives Pie to A when B is the original opener in paired-seat tests", () => {
+    let state = createBalanceInitialState("quan-gia-pie-threefold", "B");
+    expect(state.seatToAgent).toEqual({ P0: "B", P1: "A" });
+    expect(state.swap.responderAgent).toBe("A");
+    expect(isSwapEligible(state)).toBe(false);
+
+    state = playFirstBoardMove(state); // B opens, A responds.
+    expect(currentAgent(state)).toBe("A");
+    expect(isSwapEligible(state)).toBe(true);
+    const swap = getBalanceActions(state).find((action) => action.kind === "swap");
+    expect(swap).toEqual({ kind: "swap", agent: "A" });
+    if (!swap || swap.kind !== "swap") return;
+
+    const applied = applyBalanceAction(state, swap);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(applied.state.seatToAgent).toEqual({ P0: "A", P1: "B" });
+    expect(currentAgent(applied.state)).toBe("B");
+    expect(isSwapEligible(applied.state)).toBe(false);
+  });
+
   it("keeps Delayed Pie-4 available through B's second decision, then expires", () => {
     let state = createBalanceInitialState("delayed-pie-4-threefold");
     state = playFirstBoardMove(state); // A opening -> B decision 1.
