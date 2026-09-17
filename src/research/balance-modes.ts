@@ -6,7 +6,7 @@ import {
   getLegalMoves,
   MATURE_QUAN_RULESET,
 } from "../engine.js";
-import type { GameState, PlayerId, PlayerMove } from "../types.js";
+import type { GameState, MoveEvent, PlayerId, PlayerMove } from "../types.js";
 
 export type ResearchAgentId = "A" | "B";
 
@@ -41,7 +41,7 @@ export type BalanceAction =
   | Readonly<{ kind: "swap"; agent: "B" }>;
 
 export type BalanceApplyResult =
-  | Readonly<{ ok: true; state: BalanceState }>
+  | Readonly<{ ok: true; state: BalanceState; events: readonly MoveEvent[] }>
   | Readonly<{ ok: false; error: string }>;
 
 const INITIAL_MAPPING: SeatToAgent = Object.freeze({ P0: "A", P1: "B" });
@@ -125,6 +125,7 @@ export function applyBalanceAction(state: BalanceState, action: BalanceAction): 
         seatToAgent: { P0: state.seatToAgent.P1, P1: state.seatToAgent.P0 },
         swap: { ...state.swap, used: true },
       },
+      events: [],
     };
   }
 
@@ -145,6 +146,7 @@ export function applyBalanceAction(state: BalanceState, action: BalanceAction): 
           }
         : state.swap,
     },
+    events: applied.events,
   };
 }
 
