@@ -1,11 +1,6 @@
 name: r1d-production-semantics-tn-replicates
 
 on:
-  push:
-    branches:
-      - research/r1d-production-semantics
-    paths:
-      - ".github/workflows/r1d-production-semantics-tn-replicates.yml"
   workflow_dispatch:
 
 jobs:
@@ -71,3 +66,4 @@ jobs:
         with:
           name: r1d-a-tn-${{ matrix.stage }}-${{ matrix.matchup }}-r${{ matrix.replicate }}
           path: r1d-a-tn-${{ matrix.stage }}-${{ matrix.matchup }}-r${{ matrix.replicate }}.json
+          retention-days: 3
