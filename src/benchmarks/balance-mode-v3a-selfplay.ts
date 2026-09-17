@@ -250,6 +250,7 @@ function readMode(name: string): BalanceModeId {
     "open-pie-threefold",
     "quan-gia",
     "quan-gia-threefold",
+    "quan-gia-pie-threefold",
   ];
   if (allowed.includes(value as BalanceModeId)) return value as BalanceModeId;
   throw new Error(`${name} must be one of ${allowed.join("|")}`);
