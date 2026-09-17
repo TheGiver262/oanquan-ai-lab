@@ -20,6 +20,7 @@ import {
 
 const mode = readMode("--mode");
 const openingRequest = stringArg("--opening") ?? "auto";
+const caseId = stringArg("--case-id");
 const timeBudgetMs = intArg("--time-budget-ms", 1_200);
 const simulationCap = intArg("--simulation-cap", 5_000_000);
 const maxBoardMoves = intArg("--max-board-moves", 160);
@@ -38,6 +39,7 @@ let swapAtResponderNormalMoves: number | null = null;
 let finishReason: MatchFinishReason | null = null;
 let openingPlayed = "";
 let autoRootStats: Array<{ action: string; visits: number; meanValue: number; prior: number; solvedOutcome: -1 | 0 | 1 | null }> | null = null;
+const openingTrace: Array<{ agent: ResearchAgentId; action: string; boardMoveBefore: number }> = [];
 
 if (openingRequest === "auto") {
   const decision = chooseForCurrent(state);
@@ -87,11 +89,12 @@ const finalScoreA = state.game.scores[seatA];
 const finalScoreB = state.game.scores[seatB];
 
 const result = {
-  experiment: "balance-mode-v3a-selfplay-v1",
-  evidenceClass: openingRequest === "auto" ? "v3a-root-selected-selfplay" : "v3a-forced-opening-landscape",
+  experiment: "balance-mode-v3a-selfplay-v2-confirmation20",
+  evidenceClass: openingRequest === "auto" ? "v3a-root-selected-selfplay" : "v3a-competitive-opening-confirmation",
   mode,
   ruleset: state.game.ruleset.canonicalRulesetId,
   methodology: {
+    caseId,
     openingRequest,
     openingPlayed,
     originalOpenerAgent: "A",
@@ -99,6 +102,7 @@ const result = {
     perspective: "agent identity follows seat ownership through SWAP",
     unresolved: "censored at maxBoardMoves; never heuristic-adjudicated",
     search: "same frozen mode-aware PUCT V3A implementation for both agents",
+    openingFilter: "confirmation corpus removes only previously demonstrated large opener-loss openings; opener-winning openings are retained as balance counterexamples",
   },
   config: {
     timeBudgetMs,
@@ -130,6 +134,7 @@ const result = {
     finalResponderNormalMovesTaken: state.swap.responderNormalMovesTaken,
     maxResponderNormalMovesBeforeExpiry: state.swap.maxResponderNormalMovesBeforeExpiry,
   },
+  openingTrace,
   searchDiagnostics: {
     A: summarizeSearch(search.A),
     B: summarizeSearch(search.B),
@@ -155,6 +160,13 @@ function chooseForCurrent(target: BalanceState): ModeAwarePuctV3ADecision {
 }
 
 function applyChecked(target: BalanceState, action: BalanceAction): BalanceState {
+  if (openingTrace.length < 12) {
+    openingTrace.push({
+      agent: currentAgent(target),
+      action: balanceActionKey(action),
+      boardMoveBefore: target.game.moveNumber,
+    });
+  }
   const applied = applyBalanceAction(target, action);
   if (!applied.ok) throw new Error(`Illegal balance action ${balanceActionKey(action)}: ${applied.error}`);
   for (const event of applied.events) {
@@ -237,6 +249,7 @@ function readMode(name: string): BalanceModeId {
     "delayed-pie-6-threefold",
     "open-pie-threefold",
     "quan-gia",
+    "quan-gia-threefold",
   ];
   if (allowed.includes(value as BalanceModeId)) return value as BalanceModeId;
   throw new Error(`${name} must be one of ${allowed.join("|")}`);
