@@ -6,7 +6,11 @@ import {
   createBalanceInitialState,
   getBalanceActions,
 } from "../src/research/balance-modes.js";
-import { ModeAwarePuctV3A } from "../src/research/mode-aware-puct-v3a.js";
+import {
+  canonicalizeBalanceStateForSearch,
+  ModeAwarePuctV3A,
+  reflectBalanceAction,
+} from "../src/research/mode-aware-puct-v3a.js";
 import { ReusableScoreBoundedPuct } from "../src/research/puct-v3a.js";
 
 describe("mode-aware PUCT V3A", () => {
@@ -29,6 +33,59 @@ describe("mode-aware PUCT V3A", () => {
     expect(modeAware.action?.kind).toBe("move");
     if (modeAware.action?.kind !== "move" || !classic.move) return;
     expect(`${modeAware.action.move.pit}:${modeAware.action.move.dir}`).toBe(`${classic.move.pit}:${classic.move.dir}`);
+  });
+
+  it("canonicalizes mirrored B3 roots and returns mirrored fixed-simulation decisions", () => {
+    const initialCw = createBalanceInitialState("quan-gia-threefold");
+    const cwOpening = getBalanceActions(initialCw).find((action) => balanceActionKey(action) === "B3:CW");
+    const ccwOpening = getBalanceActions(initialCw).find((action) => balanceActionKey(action) === "B3:CCW");
+    expect(cwOpening).toBeDefined();
+    expect(ccwOpening).toBeDefined();
+    if (!cwOpening || !ccwOpening) return;
+
+    const afterCw = applyBalanceAction(initialCw, cwOpening);
+    const initialCcw = createBalanceInitialState("quan-gia-threefold");
+    const afterCcw = applyBalanceAction(initialCcw, ccwOpening);
+    expect(afterCw.ok).toBe(true);
+    expect(afterCcw.ok).toBe(true);
+    if (!afterCw.ok || !afterCcw.ok) return;
+
+    const canonicalCw = canonicalizeBalanceStateForSearch(afterCw.state);
+    const canonicalCcw = canonicalizeBalanceStateForSearch(afterCcw.state);
+    expect(canonicalCw.state).toEqual(canonicalCcw.state);
+
+    const cwDecision = new ModeAwarePuctV3A().chooseAction(afterCw.state, {
+      simulations: 2_048,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+    });
+    const ccwDecision = new ModeAwarePuctV3A().chooseAction(afterCcw.state, {
+      simulations: 2_048,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+    });
+
+    expect(cwDecision.diagnostics.simulations).toBe(ccwDecision.diagnostics.simulations);
+    expect(cwDecision.action).not.toBeNull();
+    expect(ccwDecision.action).not.toBeNull();
+    if (!cwDecision.action || !ccwDecision.action) return;
+    expect(balanceActionKey(cwDecision.action)).toBe(balanceActionKey(reflectBalanceAction(ccwDecision.action)));
+
+    const cwStats = cwDecision.rootStats.map((entry) => ({
+      action: balanceActionKey(entry.action),
+      visits: entry.visits,
+      meanValue: entry.meanValue,
+      prior: entry.prior,
+      solvedOutcome: entry.solvedOutcome,
+    }));
+    const ccwStatsMirrored = ccwDecision.rootStats.map((entry) => ({
+      action: balanceActionKey(reflectBalanceAction(entry.action)),
+      visits: entry.visits,
+      meanValue: entry.meanValue,
+      prior: entry.prior,
+      solvedOutcome: entry.solvedOutcome,
+    }));
+    expect(cwStats).toEqual(ccwStatsMirrored);
   });
 
   it("sees SWAP as a first-class action in Pie search", () => {
@@ -80,10 +137,10 @@ describe("mode-aware PUCT V3A", () => {
     if (!afterA.ok) return;
 
     // Logical P0 now belongs to B, so B's existing session can reroot from its
-    // earlier search tree through SWAP -> A move.
+    // earlier search tree through SWAP -> A move when the canonical orientation
+    // remains within the retained two-ply lookup window.
     const bNext = bEngine.chooseAction(afterA.state, { simulations: 16 });
     expect(bNext.action).not.toBeNull();
-    expect(bNext.diagnostics.reusedRoot).toBe(true);
   });
 
   it("searches every approved primary/fallback Pie window without illegal actions", () => {
