@@ -1,0 +1,29 @@
+name: storage-cleanup-r1d-heavy-once
+
+on:
+  push:
+    branches:
+      - research/r1d-production-semantics
+    paths:
+      - .github/workflows/storage-cleanup-r1d-heavy-once.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete archived heavy R1d benchmark runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for id in 34978920546 34980320282 34817344495 34818104961; do
+            echo "DELETE archived heavy run: $id"
+            gh api -X DELETE "repos/$REPO/actions/runs/$id"
+          done
+          echo "R1d heavy-run cleanup complete"
