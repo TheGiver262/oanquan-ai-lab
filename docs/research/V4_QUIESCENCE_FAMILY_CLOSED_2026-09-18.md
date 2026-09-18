@@ -39,12 +39,14 @@ Known causal guards still passed:
 - move 2 -> B4:CW
 - move 34 -> B2:CW
 
-However Stage 2 reproduced the same reflected regression:
+The full 10k screen reproduced the same reflected regression:
 
-- 12 W / 4 D / 14 L
-- 2 unresolved
-- completed pairs 0 favorable / 13 neutral / 2 unfavorable
-- mean pair diff -0.1333
+- Stage 1: 13 W / 4 D / 13 L, 2 unresolved, pairs 0/14/0
+- Stage 2: 12 W / 4 D / 14 L, 2 unresolved, pairs 0/13/2
+- Stage 3: 4 W / 2 D / 4 L, 0 unresolved, pairs 0/5/0
+- aggregate resolved W-D-L: 29-10-31
+- aggregate completed pairs: 0 favorable / 32 neutral / 2 unfavorable
+- aggregate mean pair diff: -0.05882
 
 The unfavorable positions were exactly the same two reflected LQ@6 cases as V4.
 
@@ -65,7 +67,14 @@ Known causal guards again passed strongly:
 - move 2 at 99,066 simulations -> B4:CW
 - move 34 at 90,000 simulations -> B2:CW
 
-Stage 3 remained fully neutral (4 W / 2 D / 4 L, 5/5 neutral pairs).
+The full 10k screen was numerically identical to V4B:
+
+- Stage 1: 13 W / 4 D / 13 L, 2 unresolved, pairs 0/14/0
+- Stage 2: 12 W / 4 D / 14 L, 2 unresolved, pairs 0/13/2
+- Stage 3: 4 W / 2 D / 4 L, 0 unresolved, pairs 0/5/0
+- aggregate resolved W-D-L: 29-10-31
+- aggregate completed pairs: 0 favorable / 32 neutral / 2 unfavorable
+- aggregate mean pair diff: -0.05882
 
 A targeted 10k regression on the two LQ@6 reflection failures was decisive:
 
@@ -111,3 +120,9 @@ known LQ@6 cases and is not justified.
 
 The next proposed track is **transposition-aware graph PUCT / MCGS-style
 search**, with V3A.1 evaluation and policy behavior frozen.
+
+## Execution evidence
+
+- V4B workflow: `v4b-refutation-only-gate`, run `35361781615`.
+- V4C workflow: `v4c-opponent-refutation-gate`, run `35362451181`.
+- V4C targeted LQ@6 workflow: `v4c-lq6-targeted-regression`, run `35363011856`.
