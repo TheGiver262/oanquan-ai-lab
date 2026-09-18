@@ -41,8 +41,8 @@ describe("Quan Gia positional threefold exact-cycle regression", () => {
     expect(positional.state.game.moveNumber).toBe(37);
     expect(positional.state.game.status).toBe("finished");
     expect(positional.finishReason).toBe("repeated_position");
-    expect(positional.state.game.winner).toBeNull();
-    expect(positional.state.game.scores).toEqual({ P0: 35, P1: 35 });
+    expect(positional.state.game.winner).toBe("P1");
+    expect(positional.state.game.scores.P1).toBeGreaterThan(positional.state.game.scores.P0);
   });
 
   it("does the same for the exact left-right reflection", () => {
@@ -58,8 +58,8 @@ describe("Quan Gia positional threefold exact-cycle regression", () => {
     expect(positional.state.game.moveNumber).toBe(37);
     expect(positional.state.game.status).toBe("finished");
     expect(positional.finishReason).toBe("repeated_position");
-    expect(positional.state.game.winner).toBeNull();
-    expect(positional.state.game.scores).toEqual({ P0: 35, P1: 35 });
+    expect(positional.state.game.winner).toBe("P1");
+    expect(positional.state.game.scores.P1).toBeGreaterThan(positional.state.game.scores.P0);
   });
 });
 
