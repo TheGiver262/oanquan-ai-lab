@@ -1,0 +1,101 @@
+name: b3-resource-aware-selfplay
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/b3-resource-aware-selfplay.yml"
+      - "src/research/resource-aware-puct-v3a.ts"
+      - "src/benchmarks/b3-resource-aware-selfplay.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  play:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: ["B3:CW","B3:CCW"]
+        opener: ["A","B"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run automatic rescue discovery
+        run: |
+          SAFE_OPENING="${{ matrix.opening }}"
+          SAFE_OPENING="${SAFE_OPENING/:/-}"
+          npx tsx src/benchmarks/b3-resource-aware-selfplay.ts \
+            --opening "${{ matrix.opening }}" \
+            --opener-agent "${{ matrix.opener }}" \
+            --baseline-simulations 10000 \
+            --primary-simulations 10000 \
+            --forecast-simulations 10000 \
+            --probe-simulations 1000 \
+            --validation-simulations 5000 \
+            --rescue-until-board-move 12 \
+            --max-board-moves 160 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: resource-${{ matrix.opener }}-${{ matrix.opening }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: play
+    if: always() && needs.play.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: resource-*
+          path: results
+      - name: Summarize
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          rows.sort(key=lambda d:(d["opening"],d["openerAgent"]))
+          md=["# B3 resource-aware selfplay","",
+              "Opener uses loss-triggered ResourceAwarePuctV3A; responder uses frozen ModeAwarePuctV3A. No action names are hard-coded into the rescue engine.","",
+              "| opening | opener id | result | margin | moves | changed rescue actions |",
+              "|---|---|---|---:|---:|---|"]
+          for d in rows:
+              o=d["outcome"]
+              if o["unresolved"]: lab="U"
+              elif o["winnerAgent"] is None: lab="D"
+              elif o["openerValue"]==1: lab="OW"
+              else: lab="RW"
+              changed=[f'{e["boardMove"]}:{e["primaryAction"]}->{e["selectedAction"]}' for e in d["rescueEvents"] if e["changedAction"]]
+              md.append(f'| {d["opening"]} | {d["openerAgent"]} | {lab} | {o["openerMargin"]} | {o["boardMoves"]} | {"; ".join(changed) or "-"} |')
+          with open("b3-resource-aware-selfplay.md","w",encoding="utf-8") as f:f.write("\n".join(md)+"\n")
+          with open("b3-resource-aware-selfplay.json","w",encoding="utf-8") as f:json.dump(rows,f,indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-resource-aware-selfplay-summary
+          path: |
+            b3-resource-aware-selfplay.md
+            b3-resource-aware-selfplay.json
+          retention-days: 7
