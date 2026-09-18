@@ -97,11 +97,16 @@ Every tournament alternates the research AI between P0 and P1.
 | `bang-nhan` | Bảng Nhãn | 8 | +3 | 55,000 | 900 ms | opening book, TT, ordering, endgame +2 |
 | `trang-nguyen` | Trạng Nguyên | 11 | +5 | 100,000 | 1,200 ms | best-first root search, endgame +4, optional learning |
 
-## R1 research branches
+## Current research status
 
-- `research/r1-production-parity`: audited production reference parity.
-- `research/r1b-pie-vs-cam-quan`: intrinsic Cấm Quan vs Standard+Pie fairness research.
-- `research/r1c-ai-promotion`: Standard AI strength research with frozen PUCT V2, V3A incumbent, and an audited 16-state balanced live-Quan corpus.
+- The algorithm race is closed; **PUCT V3A** is the current validated incumbent.
+- PVS/NegaScout is historical only and excluded from active evaluation unless explicitly reopened.
+- The active track is **game balance and B3 search-discovery**.
+- Balance benchmarks use reflection-canonical fixed-simulation PUCT; wall-clock runs are not canonical balance evidence.
+- Research-only Positional Threefold is implemented and regression-tested, but it did not solve opening balance by itself.
+- Three independent B3 defensive resources survived 100k simulations/decision in paired reflection/A-B validation; the active question is whether search can discover them without forced moves.
+
+See `docs/research/CANONICAL_RESEARCH_INDEX_2026-09-18.md` for the authoritative list of current evidence and reproducible workflows.
 
 ## CLI
 
@@ -137,22 +142,34 @@ src/
   analysis.ts
   cli.ts
   research/
-    mcts.ts
+    puct-v3a.ts
+    mode-aware-puct-v3a.ts
+    resource-aware-puct-v3a.ts
+    balance-modes.ts
+    ...historical/auxiliary research engines
   reference/
     production-ai.ts
     server-production-ai.ts
     trang-nguyen-best-first-search.ts
     trang-nguyen-learning.ts
   benchmarks/
+    research-vs-production.ts
     research-vs-server-production.ts
+    balance-mode-v3a-selfplay.ts
+    double-forced-deviation-selfplay.ts
+    b3-resource-aware-selfplay.ts
+    r1d-production-semantics-v3a-vs-trang-nguyen.ts
+    v3a-challenger-tournament.ts
 tests/
-  engine.test.ts
-  ai.test.ts
-  research-mcts.test.ts
-  server-production-parity.test.ts
+  ...engine, parity, PUCT, balance and positional-cycle regressions
+docs/research/
+  CANONICAL_RESEARCH_INDEX_2026-09-18.md
+  ...canonical verdict/protocol documents
 results/
   .gitkeep
 ```
+
+Committed benchmark outputs are intentionally not kept in `results/`. Temporary execution outputs belong in GitHub Actions artifacts; durable conclusions belong in canonical research documents.
 
 ## Research rules
 
