@@ -3,6 +3,7 @@ import { applyMove, createInitialState, getLegalMoves } from "../engine.js";
 import { MaterialGatedReusableScoreBoundedPuct } from "../research/puct-v3a1.js";
 import { SelectiveQuiescencePuctV4 } from "../research/puct-v4.js";
 import { RefutationOnlyPuctV4B } from "../research/puct-v4b.js";
+import { OpponentRefutationPuctV4C } from "../research/puct-v4c.js";
 import { parseClassicOpening } from "../research/opening-pie-analysis.js";
 import { LIVE_QUAN_BALANCED_POSITIONS, replayLiveQuanPosition } from "../research/v3-live-quan-corpus.js";
 import { BALANCED_MIDGAME_POSITIONS, replayBalancedPosition, type BalancedMidgamePosition } from "../research/v3-balanced-midgame-corpus.js";
@@ -21,9 +22,11 @@ const rows = buildPositions(stage).map((position) => {
   const incumbent = new MaterialGatedReusableScoreBoundedPuct().chooseMove(state, {
     simulations, puctExploration: 1.5, policyTemperature: 0.6, leafScoreWeight: 1.8,
   });
-  const candidateEngine = candidateKind === "v4b"
-    ? new RefutationOnlyPuctV4B()
-    : new SelectiveQuiescencePuctV4();
+  const candidateEngine = candidateKind === "v4c"
+    ? new OpponentRefutationPuctV4C()
+    : candidateKind === "v4b"
+      ? new RefutationOnlyPuctV4B()
+      : new SelectiveQuiescencePuctV4();
   const candidate = candidateEngine.chooseMove(state, {
     simulations, puctExploration: 1.5, policyTemperature: 0.6, leafScoreWeight: 1.8,
   });
@@ -45,9 +48,11 @@ const result = {
   methodology: {
     stage, fixedSimulationsPerDecision: simulations,
     incumbent: "PUCT V3A.1 material36",
-    candidate: candidateKind === "v4b"
-      ? "PUCT V4B refutation-only q10"
-      : "PUCT V4 q10 selective quiescence",
+    candidate: candidateKind === "v4c"
+      ? "PUCT V4C opponent-turn refutation q10"
+      : candidateKind === "v4b"
+        ? "PUCT V4B refutation-only q10"
+        : "PUCT V4 q10 selective quiescence",
     freshRootPerEngine: true,
     use: "discovery only; branch quality must be independently validated",
   },
@@ -103,8 +108,8 @@ function readStage(name: string): StageId {
 }
 
 
-function readCandidate(name: string): "v4" | "v4b" {
+function readCandidate(name: string): "v4" | "v4b" | "v4c" {
   const value = stringArg(name) ?? "v4";
-  if (value === "v4" || value === "v4b") return value;
-  throw new Error(`${name} must be v4|v4b`);
+  if (value === "v4" || value === "v4b" || value === "v4c") return value;
+  throw new Error(`${name} must be v4|v4b|v4c`);
 }
