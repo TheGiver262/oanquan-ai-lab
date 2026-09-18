@@ -37,6 +37,12 @@ export type ModeAwarePuctV3AOptions = {
    * final root ranking.
    */
   leafBootstrap?: "static" | "one_ply";
+  /**
+   * Research-only phase gate for the leaf score term. When finite, scoreDelta
+   * contributes only when raw board material (dan stones + quan stones) is at
+   * or below this threshold. Infinity reproduces incumbent V3A.
+   */
+  leafScoreMaterialMax?: number;
 };
 
 export type ModeAwarePuctV3ALeafSource =
@@ -231,10 +237,14 @@ export class ModeAwarePuctV3A {
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
     const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
     const leafBootstrap = options.leafBootstrap ?? DEFAULT_LEAF_BOOTSTRAP;
+    const leafScoreMaterialMax = options.leafScoreMaterialMax ?? Number.POSITIVE_INFINITY;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
     if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
       throw new Error("leafScoreWeight must be a finite non-negative number");
+    }
+    if (!(leafScoreMaterialMax >= 0)) {
+      throw new Error("leafScoreMaterialMax must be a non-negative number");
     }
 
     let simulations = 0;
@@ -284,11 +294,16 @@ export class ModeAwarePuctV3A {
 
       const reward = node.solvedOutcome ?? (
         cycleLeaf
-          ? normalizedAgentHeuristic(node.state, this.engineAgent, leafScoreWeight)
+          ? normalizedAgentHeuristic(
+              node.state,
+              this.engineAgent,
+              effectiveLeafScoreWeight(node.state, leafScoreWeight, leafScoreMaterialMax),
+            )
           : heuristicLeafReward(
               node,
               this.engineAgent as ResearchAgentId,
               leafScoreWeight,
+              leafScoreMaterialMax,
               leafBootstrap,
             )
       );
@@ -311,7 +326,7 @@ export class ModeAwarePuctV3A {
             node.state.game.status === "finished" ? node.solvedOutcome : null,
             node.state,
             this.engineAgent as ResearchAgentId,
-            leafScoreWeight,
+            effectiveLeafScoreWeight(node.state, leafScoreWeight, leafScoreMaterialMax),
           );
         }
       }
@@ -812,20 +827,36 @@ function normalizedAgentHeuristic(
   return agentHeuristicBreakdown(state, agent, scoreWeight).value;
 }
 
+function effectiveLeafScoreWeight(
+  state: BalanceState,
+  baseWeight: number,
+  scoreMaterialMax: number,
+): number {
+  if (!Number.isFinite(scoreMaterialMax)) return baseWeight;
+  return rawBoardMaterial(state.game) <= scoreMaterialMax ? baseWeight : 0;
+}
+
+function rawBoardMaterial(state: GameState): number {
+  return state.pits.reduce((sum, pit) => sum + pit.stones + pit.quanStones, 0);
+}
+
 function heuristicLeafReward(
   node: Node,
   engineAgent: ResearchAgentId,
   scoreWeight: number,
+  scoreMaterialMax: number,
   bootstrap: "static" | "one_ply",
 ): number {
-  const staticValue = normalizedAgentHeuristic(node.state, engineAgent, scoreWeight);
+  const staticWeight = effectiveLeafScoreWeight(node.state, scoreWeight, scoreMaterialMax);
+  const staticValue = normalizedAgentHeuristic(node.state, engineAgent, staticWeight);
   if (bootstrap === "static" || node.children.length === 0) return staticValue;
 
   const maximizing = currentAgent(node.state) === engineAgent;
   let best = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
   for (const child of node.children) {
+    const childWeight = effectiveLeafScoreWeight(child.state, scoreWeight, scoreMaterialMax);
     const value = child.solvedOutcome
-      ?? normalizedAgentHeuristic(child.state, engineAgent, scoreWeight);
+      ?? normalizedAgentHeuristic(child.state, engineAgent, childWeight);
     best = maximizing ? Math.max(best, value) : Math.min(best, value);
   }
   return Number.isFinite(best) ? best : staticValue;
