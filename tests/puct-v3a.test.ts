@@ -89,6 +89,46 @@ describe("PUCT V3A", () => {
     expect(explicitDiagnostics).toEqual(implicitDiagnostics);
   });
 
+  it("preserves incumbent output when material gate is explicit Infinity", () => {
+    const state = createInitialState();
+    const implicit = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 512,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+    });
+    const explicit = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 512,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+      leafScoreMaterialMax: Number.POSITIVE_INFINITY,
+    });
+
+    expect(explicit.move).toEqual(implicit.move);
+    expect(explicit.rootStats).toEqual(implicit.rootStats);
+    const { elapsedMs: implicitElapsed, ...implicitDiagnostics } = implicit.diagnostics;
+    const { elapsedMs: explicitElapsed, ...explicitDiagnostics } = explicit.diagnostics;
+    expect(implicitElapsed).toBeGreaterThanOrEqual(0);
+    expect(explicitElapsed).toBeGreaterThanOrEqual(0);
+    expect(explicitDiagnostics).toEqual(implicitDiagnostics);
+  });
+
+  it("keeps policy priors frozen when the material gate changes leaf values", () => {
+    const state = createInitialState();
+    const incumbent = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 256,
+      leafScoreMaterialMax: Number.POSITIVE_INFINITY,
+    });
+    const gated = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 256,
+      leafScoreMaterialMax: 36,
+    });
+    const key = (move: { pit: string; dir: string }) => `${move.pit}:${move.dir}`;
+    const priors = (decision: typeof incumbent) =>
+      new Map(decision.rootStats.map((entry) => [key(entry.move), entry.prior]));
+
+    expect(priors(gated)).toEqual(priors(incumbent));
+  });
+
   it("keeps root policy priors frozen when leaf score weight changes", () => {
     const state = createInitialState();
     const incumbent = new ReusableScoreBoundedPuct().chooseMove(state, {
@@ -116,6 +156,9 @@ describe("PUCT V3A", () => {
     );
     expect(() => new ReusableScoreBoundedPuct().chooseMove(state, { leafScoreWeight: -0.1 })).toThrow(
       "leafScoreWeight must be a finite non-negative number",
+    );
+    expect(() => new ReusableScoreBoundedPuct().chooseMove(state, { leafScoreMaterialMax: -1 })).toThrow(
+      "leafScoreMaterialMax must be a non-negative number",
     );
   });
 });
