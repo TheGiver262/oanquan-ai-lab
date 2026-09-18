@@ -69,6 +69,7 @@ const candidate = readCandidate("--candidate", "v3a");
 const timeBudgetMs = intArg("--time-budget-ms", 1_200);
 const simulationCap = intArg("--simulation-cap", 5_000_000);
 const productionNodeBudget = intArg("--production-nodes", 100_000);
+const candidateLeafScoreMaterialMax = numberArg("--candidate-leaf-score-material-max", Number.POSITIVE_INFINITY);
 const replicate = intArg("--replicate", 1);
 const outPath = stringArg("--out");
 
@@ -123,6 +124,7 @@ const result = {
     timeBudgetMs,
     simulationCap,
     productionNodeBudget,
+    candidateLeafScoreMaterialMax,
     replicate,
     puctExploration: 1.5,
     policyTemperature: 0.6,
@@ -173,6 +175,7 @@ function play(position: Position, candidateSeat: PlayerId): GameResult {
         timeBudgetMs,
         puctExploration: 1.5,
         policyTemperature: 0.6,
+        leafScoreMaterialMax: candidateLeafScoreMaterialMax,
       });
       recordV3(search, decision);
       move = decision.move;
@@ -374,5 +377,16 @@ function intArg(name: string, fallback: number): number {
   if (raw === null) return fallback;
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer`);
+  return value;
+}
+
+
+function numberArg(name: string, fallback: number): number {
+  const raw = stringArg(name);
+  if (raw === null) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a finite non-negative number`);
+  }
   return value;
 }
