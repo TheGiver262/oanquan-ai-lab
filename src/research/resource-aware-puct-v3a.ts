@@ -115,8 +115,8 @@ export class ResourceAwarePuctV3A {
     const puctExploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
 
-    if (!Number.isSafeInteger(rescueDepth) || rescueDepth < 1) {
-      throw new Error("rescueDepth must be a positive integer");
+    if (!Number.isSafeInteger(rescueDepth) || rescueDepth < 1 || rescueDepth > 2) {
+      throw new Error("rescueDepth must be 1 or 2");
     }
 
     const recursiveOptions: ResourceAwarePuctV3AOptions = {
@@ -279,15 +279,7 @@ function rolloutAfterAction(
 ): ResourceOutcome {
   const applied = applyBalanceAction(state, action);
   if (!applied.ok) {
-    return {
-      unresolved: true,
-      value: null,
-      margin: null,
-      boardMoves: state.game.moveNumber,
-      finishReason: null,
-      trace: [`ILLEGAL:${balanceActionKey(action)}`],
-      rescueChanges: [],
-    };
+    return illegalOutcome(state.game.moveNumber, action);
   }
 
   let cursor = applied.state;
@@ -295,60 +287,89 @@ function rolloutAfterAction(
     A: new ModeAwarePuctV3A(),
     B: new ModeAwarePuctV3A(),
   };
-  const rescueEngine = futureRescues > 0 ? new ResourceAwarePuctV3A() : null;
-  let remainingRescues = futureRescues;
   const rescueChanges: ResourceOutcome["rescueChanges"] = [];
   const trace = [balanceActionKey(action)];
-  let finishReason: string | null = null;
-
-  for (const event of applied.events) {
-    if (event.type === "match_finished") finishReason = event.reason;
-  }
+  let finishReason = finishReasonFromEvents(applied.events);
 
   while (cursor.game.status === "playing" && cursor.game.moveNumber < maxBoardMoves) {
     const agent = currentAgent(cursor);
-    let nextAction: BalanceAction | null = null;
+    const decision = engines[agent].chooseAction(cursor, {
+      simulations,
+      puctExploration,
+      policyTemperature,
+    });
+    if (!decision.action) break;
 
     if (
       agent === seeker
-      && rescueEngine
-      && remainingRescues > 0
+      && futureRescues > 0
       && cursor.game.moveNumber <= (nestedOptions.rescueUntilBoardMove ?? DEFAULT_RESCUE_UNTIL_BOARD_MOVE)
+      && decision.rootStats.length > 1
     ) {
-      const nestedBudget = Math.max(1, simulations);
-      const resourceDecision = rescueEngine.chooseAction(cursor, {
-        primarySimulations: Math.min(nestedOptions.primarySimulations ?? nestedBudget, nestedBudget),
-        forecastSimulations: Math.min(nestedOptions.forecastSimulations ?? nestedBudget, nestedBudget),
-        probeSimulations: Math.min(nestedOptions.probeSimulations ?? nestedBudget, nestedBudget),
-        validationSimulations: Math.min(nestedOptions.validationSimulations ?? nestedBudget, nestedBudget),
-        candidateLimit: nestedOptions.candidateLimit ?? DEFAULT_CANDIDATE_LIMIT,
-        validateTop: nestedOptions.validateTop ?? DEFAULT_VALIDATE_TOP,
-        rescueUntilBoardMove: nestedOptions.rescueUntilBoardMove ?? DEFAULT_RESCUE_UNTIL_BOARD_MOVE,
-        rescueDepth: remainingRescues,
-        maxBoardMoves,
-        puctExploration,
-        policyTemperature,
-      });
-      nextAction = resourceDecision.action;
-      if (resourceDecision.rescueDiagnostics.changedAction) {
-        rescueChanges.push({
-          boardMove: cursor.game.moveNumber,
-          primaryAction: resourceDecision.rescueDiagnostics.primaryAction,
-          selectedAction: resourceDecision.rescueDiagnostics.selectedAction,
-        });
-        remainingRescues -= 1;
+      const primaryKey = balanceActionKey(decision.action);
+      const candidateLimit = nestedOptions.candidateLimit ?? DEFAULT_CANDIDATE_LIMIT;
+      const validateTop = nestedOptions.validateTop ?? DEFAULT_VALIDATE_TOP;
+      const probeBudget = Math.max(
+        1,
+        Math.min(nestedOptions.probeSimulations ?? simulations, simulations),
+      );
+      const validationBudget = Math.max(
+        1,
+        Math.min(nestedOptions.validationSimulations ?? simulations, simulations),
+      );
+
+      const probes = decision.rootStats
+        .filter((entry) => balanceActionKey(entry.action) !== primaryKey)
+        .slice(0, Math.max(0, candidateLimit))
+        .map((entry) => ({
+          action: entry.action,
+          outcome: rolloutVanillaAfterAction(
+            cursor,
+            entry.action,
+            seeker,
+            probeBudget,
+            maxBoardMoves,
+            puctExploration,
+            policyTemperature,
+          ),
+        }))
+        .sort((left, right) => compareOutcomes(right.outcome, left.outcome));
+
+      const validated = probes
+        .slice(0, Math.max(0, validateTop))
+        .map((entry) => ({
+          action: entry.action,
+          outcome: rolloutVanillaAfterAction(
+            cursor,
+            entry.action,
+            seeker,
+            validationBudget,
+            maxBoardMoves,
+            puctExploration,
+            policyTemperature,
+          ),
+        }))
+        .sort((left, right) => compareOutcomes(right.outcome, left.outcome));
+
+      const rescue = validated.find((entry) => (entry.outcome.value ?? -2) >= 0);
+      if (rescue) {
+        return {
+          ...rescue.outcome,
+          trace: [...trace, ...rescue.outcome.trace].slice(0, 24),
+          rescueChanges: [
+            ...rescueChanges,
+            {
+              boardMove: cursor.game.moveNumber,
+              primaryAction: primaryKey,
+              selectedAction: balanceActionKey(rescue.action),
+            },
+          ],
+        };
       }
-    } else {
-      nextAction = engines[agent].chooseAction(cursor, {
-        simulations,
-        puctExploration,
-        policyTemperature,
-      }).action;
     }
 
-    if (!nextAction) break;
-    if (trace.length < 24) trace.push(balanceActionKey(nextAction));
-    const next = applyBalanceAction(cursor, nextAction);
+    if (trace.length < 24) trace.push(balanceActionKey(decision.action));
+    const next = applyBalanceAction(cursor, decision.action);
     if (!next.ok) {
       return {
         unresolved: true,
@@ -356,37 +377,114 @@ function rolloutAfterAction(
         margin: null,
         boardMoves: cursor.game.moveNumber,
         finishReason: null,
-        trace: [...trace, `ILLEGAL:${balanceActionKey(nextAction)}`],
+        trace: [...trace, `ILLEGAL:${balanceActionKey(decision.action)}`],
         rescueChanges,
       };
     }
-    for (const event of next.events) {
-      if (event.type === "match_finished") finishReason = event.reason;
-    }
+    finishReason = finishReasonFromEvents(next.events) ?? finishReason;
     cursor = next.state;
   }
 
-  if (cursor.game.status !== "finished") {
+  return outcomeFromTerminal(cursor, seeker, finishReason, trace, rescueChanges);
+}
+
+function rolloutVanillaAfterAction(
+  state: BalanceState,
+  action: BalanceAction,
+  seeker: ResearchAgentId,
+  simulations: number,
+  maxBoardMoves: number,
+  puctExploration: number,
+  policyTemperature: number,
+): ResourceOutcome {
+  const applied = applyBalanceAction(state, action);
+  if (!applied.ok) return illegalOutcome(state.game.moveNumber, action);
+
+  let cursor = applied.state;
+  const engines: Record<ResearchAgentId, ModeAwarePuctV3A> = {
+    A: new ModeAwarePuctV3A(),
+    B: new ModeAwarePuctV3A(),
+  };
+  const trace = [balanceActionKey(action)];
+  let finishReason = finishReasonFromEvents(applied.events);
+
+  while (cursor.game.status === "playing" && cursor.game.moveNumber < maxBoardMoves) {
+    const agent = currentAgent(cursor);
+    const decision = engines[agent].chooseAction(cursor, {
+      simulations,
+      puctExploration,
+      policyTemperature,
+    });
+    if (!decision.action) break;
+    if (trace.length < 24) trace.push(balanceActionKey(decision.action));
+    const next = applyBalanceAction(cursor, decision.action);
+    if (!next.ok) {
+      return {
+        unresolved: true,
+        value: null,
+        margin: null,
+        boardMoves: cursor.game.moveNumber,
+        finishReason: null,
+        trace: [...trace, `ILLEGAL:${balanceActionKey(decision.action)}`],
+        rescueChanges: [],
+      };
+    }
+    finishReason = finishReasonFromEvents(next.events) ?? finishReason;
+    cursor = next.state;
+  }
+
+  return outcomeFromTerminal(cursor, seeker, finishReason, trace, []);
+}
+
+function illegalOutcome(boardMoves: number, action: BalanceAction): ResourceOutcome {
+  return {
+    unresolved: true,
+    value: null,
+    margin: null,
+    boardMoves,
+    finishReason: null,
+    trace: [`ILLEGAL:${balanceActionKey(action)}`],
+    rescueChanges: [],
+  };
+}
+
+function finishReasonFromEvents(
+  events: readonly { type: string; reason?: string }[],
+): string | null {
+  for (const event of events) {
+    if (event.type === "match_finished" && typeof event.reason === "string") return event.reason;
+  }
+  return null;
+}
+
+function outcomeFromTerminal(
+  state: BalanceState,
+  seeker: ResearchAgentId,
+  finishReason: string | null,
+  trace: string[],
+  rescueChanges: ResourceOutcome["rescueChanges"],
+): ResourceOutcome {
+  if (state.game.status !== "finished") {
     return {
       unresolved: true,
       value: null,
       margin: null,
-      boardMoves: cursor.game.moveNumber,
+      boardMoves: state.game.moveNumber,
       finishReason,
       trace,
       rescueChanges,
     };
   }
 
-  const winner = winnerAgent(cursor);
+  const winner = winnerAgent(state);
   const value: -1 | 0 | 1 = winner === null ? 0 : winner === seeker ? 1 : -1;
-  const seat = seatForAgent(cursor, seeker);
+  const seat = seatForAgent(state, seeker);
   const opponentSeat = seat === "P0" ? "P1" : "P0";
   return {
     unresolved: false,
     value,
-    margin: cursor.game.scores[seat] - cursor.game.scores[opponentSeat],
-    boardMoves: cursor.game.moveNumber,
+    margin: state.game.scores[seat] - state.game.scores[opponentSeat],
+    boardMoves: state.game.moveNumber,
     finishReason,
     trace,
     rescueChanges,
