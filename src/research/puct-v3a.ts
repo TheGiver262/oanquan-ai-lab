@@ -11,6 +11,12 @@ export type PuctV3AOptions = {
    * Policy priors remain frozen at 1.8 so this changes leaf value only.
    */
   leafScoreWeight?: number;
+  /**
+   * Research-only phase gate for leaf scoreDelta. Infinity reproduces V3A.
+   * When finite, scoreDelta contributes only when remaining raw board material
+   * (dan stones + quan stones) is <= this threshold. Policy priors stay frozen.
+   */
+  leafScoreMaterialMax?: number;
 };
 
 export type PuctV3ADiagnostics = {
@@ -112,10 +118,14 @@ export class ReusableScoreBoundedPuct {
     const exploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
     const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
+    const leafScoreMaterialMax = options.leafScoreMaterialMax ?? Number.POSITIVE_INFINITY;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
     if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
       throw new Error("leafScoreWeight must be a finite non-negative number");
+    }
+    if (!(leafScoreMaterialMax >= 0)) {
+      throw new Error("leafScoreMaterialMax must be a non-negative number");
     }
 
     let simulations = 0;
@@ -163,7 +173,7 @@ export class ReusableScoreBoundedPuct {
       const reward = node.solvedOutcome ?? normalizedHeuristic(
         node.state,
         this.enginePlayer,
-        leafScoreWeight,
+        effectiveLeafScoreWeight(node.state, leafScoreWeight, leafScoreMaterialMax),
       );
       for (const cursor of path) {
         cursor.visits += 1;
@@ -430,6 +440,19 @@ function heuristicPolicyPriors(
       total > 0 && Number.isFinite(total) ? (weights[index] ?? 0) / total : uniform,
     ]),
   );
+}
+
+function effectiveLeafScoreWeight(
+  state: GameState,
+  baseWeight: number,
+  scoreMaterialMax: number,
+): number {
+  if (!Number.isFinite(scoreMaterialMax)) return baseWeight;
+  return rawBoardMaterial(state) <= scoreMaterialMax ? baseWeight : 0;
+}
+
+function rawBoardMaterial(state: GameState): number {
+  return state.pits.reduce((sum, pit) => sum + pit.stones + pit.quanStones, 0);
 }
 
 function normalizedHeuristic(
