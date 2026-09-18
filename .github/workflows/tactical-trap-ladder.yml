@@ -1,0 +1,133 @@
+name: tactical-trap-ladder
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - "src/benchmarks/tactical-trap-ladder.ts"
+      - ".github/workflows/tactical-trap-ladder.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/research/balance-modes.ts"
+      - "src/engine.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  ladder:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: pie-b1-cw-m6
+            mode: pie-threefold
+            opening: B1:CW
+            target: 6
+          - id: pie-b1-ccw-m23
+            mode: pie-threefold
+            opening: B1:CCW
+            target: 23
+          - id: pie-b2-cw-m9
+            mode: pie-threefold
+            opening: B2:CW
+            target: 9
+          - id: qgpie-b2-cw-m25
+            mode: quan-gia-pie-threefold
+            opening: B2:CW
+            target: 25
+          - id: qg3f-b1-cw-m20
+            mode: quan-gia-threefold
+            opening: B1:CW
+            target: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Search bait-response-counter ladders
+        run: |
+          npx tsx src/benchmarks/tactical-trap-ladder.ts \
+            --mode "${{ matrix.mode }}" \
+            --opening "${{ matrix.opening }}" \
+            --target-board-move "${{ matrix.target }}" \
+            --opener-agent A \
+            --baseline-simulations 20000 \
+            --probe-simulations 2000 \
+            --validation-simulations 20000 \
+            --responder-top-k 3 \
+            --validate-top 3 \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ladder-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: ladder
+    if: always() && needs.ladder.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ladder-*
+          path: results
+      - name: Build ladder summary
+        run: |
+          python - <<'PY'
+          import glob,json
+          docs=[]
+          for p in glob.glob("results/**/result.json", recursive=True):
+              with open(p,encoding="utf-8") as f: docs.append(json.load(f))
+          docs.sort(key=lambda d:(d["mode"],d["opening"],d["target"]["boardMove"]))
+          md=["# Tactical trap ladder", "",
+              "One move earlier than each near-draw singularity: enumerate P0 move, P1 top-3 replies, then all P0 counters. Probe=2k, top candidates revalidated against P1 at 20k.", ""]
+          total_bait=total_robust=total_validated=0
+          for d in docs:
+              total_bait += len(d["baitTrapCandidates"])
+              total_robust += len(d["robustCandidates"])
+              total_validated += len(d["validatedBaitTraps"])
+              md += [f'## {d["mode"]} — {d["opening"]} — target move {d["target"]["boardMove"]}', "",
+                     f'- Baseline: value **{d["baseline"]["openerValue"]}**, margin **{d["baseline"]["openerMargin"]}**',
+                     f'- Anchor move: **{d["anchor"]["boardMove"]}** (baseline action {d["anchor"]["baselineChosenAction"]})',
+                     f'- Probe bait candidates (P1 top-1 falls into draw/win): **{len(d["baitTrapCandidates"])}**',
+                     f'- Probe robust candidates (all P1 top-3 still draw/win): **{len(d["robustCandidates"])}**',
+                     f'- 20k validated bait resources: **{len(d["validatedBaitTraps"])}**', ""]
+              if d["validations"]:
+                  md += ["| first deviation | rank | probe top1 | probe worst top3 | P1 20k reply | best P0 counter | validated outcome |",
+                         "|---|---:|---|---|---|---|---|"]
+                  for v in d["validations"]:
+                      first=next(x for x in d["candidates"] if x["firstAction"]==v["firstAction"])
+                      b=v["validation"]["bestCounter"]
+                      md.append(f'| {v["firstAction"]} | {v["firstRank"]} | {first["top1Outcome"]["openerValue"]} ({first["top1Outcome"]["openerMargin"]}) | {first["robustTopKOutcome"]["openerValue"]} ({first["robustTopKOutcome"]["openerMargin"]}) | {v["validation"]["responderAction"]} | {b["action"]} | {b["outcome"]["openerValue"]} ({b["outcome"]["openerMargin"]}) |')
+                  md.append("")
+          md += ["## Global", "",
+                 f'- Probe bait candidates: **{total_bait}**',
+                 f'- Probe robust top-3 candidates: **{total_robust}**',
+                 f'- 20k validated bait resources: **{total_validated}**', ""]
+          with open("tactical-trap-ladder-summary.md","w",encoding="utf-8") as f:f.write("\n".join(md)+"\n")
+          with open("tactical-trap-ladder-summary.json","w",encoding="utf-8") as f:json.dump(docs,f,indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tactical-trap-ladder-summary
+          path: |
+            tactical-trap-ladder-summary.md
+            tactical-trap-ladder-summary.json
+          retention-days: 7
