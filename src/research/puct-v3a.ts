@@ -6,6 +6,11 @@ export type PuctV3AOptions = {
   timeBudgetMs?: number;
   puctExploration?: number;
   policyTemperature?: number;
+  /**
+   * Research-only leaf-value score coefficient. Incumbent V3A uses 1.8.
+   * Policy priors remain frozen at 1.8 so this changes leaf value only.
+   */
+  leafScoreWeight?: number;
 };
 
 export type PuctV3ADiagnostics = {
@@ -51,6 +56,7 @@ type Node = {
 const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
+const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
 const REAL_MOVE_REUSE_PLIES = 2;
 
 /**
@@ -105,8 +111,12 @@ export class ReusableScoreBoundedPuct {
     const deadline = started + (options.timeBudgetMs ?? Number.POSITIVE_INFINITY);
     const exploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
+    const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
+    if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
+      throw new Error("leafScoreWeight must be a finite non-negative number");
+    }
 
     let simulations = 0;
     let expandedNodes = 0;
@@ -150,7 +160,11 @@ export class ReusableScoreBoundedPuct {
         if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, path.length);
       }
 
-      const reward = node.solvedOutcome ?? normalizedHeuristic(node.state, this.enginePlayer);
+      const reward = node.solvedOutcome ?? normalizedHeuristic(
+        node.state,
+        this.enginePlayer,
+        leafScoreWeight,
+      );
       for (const cursor of path) {
         cursor.visits += 1;
         cursor.valueSum += reward;
@@ -399,7 +413,11 @@ function heuristicPolicyPriors(
   const sign = state.currentPlayer === enginePlayer ? 1 : -1;
   const scored = moves.map((move) => {
     const result = applyMove(state, move);
-    const score = result.ok ? sign * normalizedHeuristic(result.state, enginePlayer) : -1;
+    // Freeze policy priors to incumbent V3A; leafScoreWeight changes only the
+    // value estimator used when a simulation stops at a heuristic leaf.
+    const score = result.ok
+      ? sign * normalizedHeuristic(result.state, enginePlayer, DEFAULT_LEAF_SCORE_WEIGHT)
+      : -1;
     return { move, score };
   });
   const maxScore = Math.max(...scored.map((entry) => entry.score));
@@ -414,14 +432,18 @@ function heuristicPolicyPriors(
   );
 }
 
-function normalizedHeuristic(state: GameState, player: PlayerId): number {
+function normalizedHeuristic(
+  state: GameState,
+  player: PlayerId,
+  scoreWeight = DEFAULT_LEAF_SCORE_WEIGHT,
+): number {
   if (state.status === "finished") return terminalOutcome(state, player);
   const opponent = otherPlayer(player);
   const scoreDelta = state.scores[player] - state.scores[opponent];
   const sideDelta = sideStones(state, player) - sideStones(state, opponent);
   const mobilityDelta = playablePits(state, player) - playablePits(state, opponent);
   const refillDelta = refillSafety(state, player) - refillSafety(state, opponent);
-  const material = scoreDelta * 1.8 + sideDelta * 0.45 + mobilityDelta * 0.8 + refillDelta * 2.5;
+  const material = scoreDelta * scoreWeight + sideDelta * 0.45 + mobilityDelta * 0.8 + refillDelta * 2.5;
   return Math.tanh(material / 18);
 }
 
