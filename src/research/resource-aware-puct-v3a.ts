@@ -177,7 +177,7 @@ export class ResourceAwarePuctV3A {
             rootVisits: entry.visits,
             rootMean: entry.meanValue,
             probe,
-            validation: null,
+            validation: null as ResourceOutcome | null,
           } satisfies ResourceCandidateDiagnostic,
         };
       });
