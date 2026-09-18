@@ -22,7 +22,7 @@ export type PuctV3AOptions = {
    * "unstable_one_ply" evaluates already-expanded children only at tactical
    * leaves selected by leafQuiescenceScoreSwing.
    */
-  leafBootstrap?: "static" | "unstable_one_ply" | "unstable_refutation_only";
+  leafBootstrap?: "static" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only";
   leafQuiescenceScoreSwing?: number;
 };
 
@@ -70,7 +70,7 @@ const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
 const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
-const DEFAULT_LEAF_BOOTSTRAP: "static" | "unstable_one_ply" | "unstable_refutation_only" = "static";
+const DEFAULT_LEAF_BOOTSTRAP: "static" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only" = "static";
 const DEFAULT_LEAF_QUIESCENCE_SCORE_SWING = 10;
 const REAL_MOVE_REUSE_PLIES = 2;
 
@@ -486,13 +486,17 @@ function heuristicLeafReward(
   enginePlayer: PlayerId,
   scoreWeight: number,
   scoreMaterialMax: number,
-  bootstrap: "static" | "unstable_one_ply" | "unstable_refutation_only",
+  bootstrap: "static" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only",
   quiescenceScoreSwing: number,
 ): number {
   const staticWeight = effectiveLeafScoreWeight(node.state, scoreWeight, scoreMaterialMax);
   const staticValue = normalizedHeuristic(node.state, enginePlayer, staticWeight);
   if (bootstrap === "static" || node.children.length === 0) return staticValue;
   if (!isTacticallyUnstableLeaf(node, enginePlayer, quiescenceScoreSwing)) return staticValue;
+  if (
+    bootstrap === "unstable_opponent_refutation_only"
+    && node.state.currentPlayer === enginePlayer
+  ) return staticValue;
 
   const maximizing = node.state.currentPlayer === enginePlayer;
   let best = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
@@ -503,7 +507,10 @@ function heuristicLeafReward(
     best = maximizing ? Math.max(best, value) : Math.min(best, value);
   }
   if (!Number.isFinite(best)) return staticValue;
-  return bootstrap === "unstable_refutation_only"
+  return (
+    bootstrap === "unstable_refutation_only"
+    || bootstrap === "unstable_opponent_refutation_only"
+  )
     ? Math.min(staticValue, best)
     : best;
 }
