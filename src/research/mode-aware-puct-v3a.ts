@@ -5,7 +5,8 @@ import {
   balanceActionKey,
   currentAgent,
   getBalanceActions,
-  reflectPositionalRepetitionKey,
+  positionalHistoryContextKey,
+  reflectPositionalHistory,
   seatForAgent,
   winnerAgent,
   type BalanceAction,
@@ -363,7 +364,7 @@ export function reflectBalanceStateForSearch(state: BalanceState): BalanceState 
       pits,
       recentMoves,
     },
-    positionalHistory: (state.positionalHistory ?? []).map(reflectPositionalRepetitionKey),
+    positionalHistory: reflectPositionalHistory(state.positionalHistory),
   };
 }
 
@@ -440,9 +441,7 @@ function strategicBalanceStateKey(state: BalanceState): string {
   const repeat = game.ruleset.repetitionPolicy === "threefold"
     ? game.recentMoves.map((move) => `${move.player}:${move.pit}:${move.dir}`).join(",")
     : "-";
-  const positionalRepeat = state.positionalHistory?.length
-    ? state.positionalHistory.join(">")
-    : "-";
+  const positionalRepeat = positionalHistoryContextKey(state.positionalHistory);
   return [
     game.ruleset.canonicalRulesetId,
     state.mode,
