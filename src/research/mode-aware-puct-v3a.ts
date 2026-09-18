@@ -30,6 +30,13 @@ export type ModeAwarePuctV3AOptions = {
    * to the incumbent 1.8 score weight so experiments isolate value estimation.
    */
   leafScoreWeight?: number;
+  /**
+   * Research-only leaf bootstrap. "static" is incumbent V3A. "one_ply"
+   * evaluates the already-expanded child states with a one-ply max/min backup.
+   * It does not alter priors, tree selection, exact solved propagation or
+   * final root ranking.
+   */
+  leafBootstrap?: "static" | "one_ply";
 };
 
 export type ModeAwarePuctV3ALeafSource =
@@ -147,6 +154,7 @@ const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
 const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
+const DEFAULT_LEAF_BOOTSTRAP: "static" | "one_ply" = "static";
 const REAL_ACTION_REUSE_PLIES = 2;
 
 const REFLECT_PIT: Readonly<Record<PitId, PitId>> = Object.freeze({
@@ -222,6 +230,7 @@ export class ModeAwarePuctV3A {
     const exploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
     const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
+    const leafBootstrap = options.leafBootstrap ?? DEFAULT_LEAF_BOOTSTRAP;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
     if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
@@ -273,10 +282,15 @@ export class ModeAwarePuctV3A {
         if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, path.length);
       }
 
-      const reward = node.solvedOutcome ?? normalizedAgentHeuristic(
-        node.state,
-        this.engineAgent,
-        leafScoreWeight,
+      const reward = node.solvedOutcome ?? (
+        cycleLeaf
+          ? normalizedAgentHeuristic(node.state, this.engineAgent, leafScoreWeight)
+          : heuristicLeafReward(
+              node,
+              this.engineAgent as ResearchAgentId,
+              leafScoreWeight,
+              leafBootstrap,
+            )
       );
       if (rootLeafAudit && path.length > 1) {
         const rootChild = path[1];
@@ -797,6 +811,26 @@ function normalizedAgentHeuristic(
 ): number {
   return agentHeuristicBreakdown(state, agent, scoreWeight).value;
 }
+
+function heuristicLeafReward(
+  node: Node,
+  engineAgent: ResearchAgentId,
+  scoreWeight: number,
+  bootstrap: "static" | "one_ply",
+): number {
+  const staticValue = normalizedAgentHeuristic(node.state, engineAgent, scoreWeight);
+  if (bootstrap === "static" || node.children.length === 0) return staticValue;
+
+  const maximizing = currentAgent(node.state) === engineAgent;
+  let best = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+  for (const child of node.children) {
+    const value = child.solvedOutcome
+      ?? normalizedAgentHeuristic(child.state, engineAgent, scoreWeight);
+    best = maximizing ? Math.max(best, value) : Math.min(best, value);
+  }
+  return Number.isFinite(best) ? best : staticValue;
+}
+
 
 function sideStones(state: GameState, player: PlayerId): number {
   return state.pits.filter((pit) => pit.owner === player).reduce((sum, pit) => sum + pit.stones, 0);
