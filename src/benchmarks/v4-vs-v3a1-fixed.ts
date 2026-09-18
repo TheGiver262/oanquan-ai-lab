@@ -46,8 +46,15 @@ const STAGE3_IDS = new Set([
 const stage = readStage("--stage");
 const fixedSimulations = intArg("--fixed-simulations", 10_000);
 const candidateKind = readCandidate("--candidate");
+const positionId = stringArg("--position-id");
 const outPath = stringArg("--out");
-const positions = buildPositions(stage);
+const allPositions = buildPositions(stage);
+const positions = positionId
+  ? allPositions.filter((position) => position.id === positionId)
+  : allPositions;
+if (positionId && positions.length !== 1) {
+  throw new Error(`Unknown --position-id ${positionId} for ${stage}`);
+}
 
 const details: GameResult[] = [];
 const perPosition = new Map<
@@ -99,6 +106,7 @@ const result = {
     policyTemperature: 0.6,
     leafScoreMaterialMax: 36,
     leafQuiescenceScoreSwing: 10,
+    positionId,
     policyPriorsFrozenToIncumbent: true,
     pairing: "Each exact position is played twice with candidate ownership swapped P0/P1.",
     primaryMetric: "pairDiff from candidate perspective",
