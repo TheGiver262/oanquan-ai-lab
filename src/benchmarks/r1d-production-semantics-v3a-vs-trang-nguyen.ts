@@ -71,9 +71,16 @@ const simulationCap = intArg("--simulation-cap", 5_000_000);
 const productionNodeBudget = intArg("--production-nodes", 100_000);
 const candidateLeafScoreMaterialMax = numberArg("--candidate-leaf-score-material-max", Number.POSITIVE_INFINITY);
 const replicate = intArg("--replicate", 1);
+const positionId = stringArg("--position-id");
 const outPath = stringArg("--out");
 
-const positions = buildPositions(stage);
+const allPositions = buildPositions(stage);
+const positions = positionId
+  ? allPositions.filter((position) => position.id === positionId)
+  : allPositions;
+if (positionId && positions.length !== 1) {
+  throw new Error(`Unknown --position-id ${positionId} for ${stage}`);
+}
 const candidateSearch = emptySearchSummary();
 const baselineSearch = emptySearchSummary();
 const details: GameResult[] = [];
@@ -126,6 +133,7 @@ const result = {
     productionNodeBudget,
     candidateLeafScoreMaterialMax,
     replicate,
+    positionId,
     puctExploration: 1.5,
     policyTemperature: 0.6,
   },
