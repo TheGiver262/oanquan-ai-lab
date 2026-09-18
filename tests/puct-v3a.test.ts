@@ -66,6 +66,46 @@ describe("PUCT V3A", () => {
     expect(decision.diagnostics.solvedRoot).toBe(1);
   });
 
+  it("preserves incumbent output at explicit leaf score weight 1.8", () => {
+    const state = createInitialState();
+    const implicit = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 512,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+    });
+    const explicit = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 512,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+      leafScoreWeight: 1.8,
+    });
+
+    expect(explicit.move).toEqual(implicit.move);
+    expect(explicit.rootStats).toEqual(implicit.rootStats);
+    const { elapsedMs: implicitElapsed, ...implicitDiagnostics } = implicit.diagnostics;
+    const { elapsedMs: explicitElapsed, ...explicitDiagnostics } = explicit.diagnostics;
+    expect(implicitElapsed).toBeGreaterThanOrEqual(0);
+    expect(explicitElapsed).toBeGreaterThanOrEqual(0);
+    expect(explicitDiagnostics).toEqual(implicitDiagnostics);
+  });
+
+  it("keeps root policy priors frozen when leaf score weight changes", () => {
+    const state = createInitialState();
+    const incumbent = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 256,
+      leafScoreWeight: 1.8,
+    });
+    const zeroScoreLeaf = new ReusableScoreBoundedPuct().chooseMove(state, {
+      simulations: 256,
+      leafScoreWeight: 0,
+    });
+    const key = (move: { pit: string; dir: string }) => `${move.pit}:${move.dir}`;
+    const priors = (decision: typeof incumbent) =>
+      new Map(decision.rootStats.map((entry) => [key(entry.move), entry.prior]));
+
+    expect(priors(zeroScoreLeaf)).toEqual(priors(incumbent));
+  });
+
   it("rejects invalid exploration settings", () => {
     const state = createInitialState();
     expect(() => new ReusableScoreBoundedPuct().chooseMove(state, { puctExploration: 0 })).toThrow(
@@ -73,6 +113,9 @@ describe("PUCT V3A", () => {
     );
     expect(() => new ReusableScoreBoundedPuct().chooseMove(state, { policyTemperature: 0 })).toThrow(
       "policyTemperature must be > 0",
+    );
+    expect(() => new ReusableScoreBoundedPuct().chooseMove(state, { leafScoreWeight: -0.1 })).toThrow(
+      "leafScoreWeight must be a finite non-negative number",
     );
   });
 });
