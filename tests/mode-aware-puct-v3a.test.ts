@@ -113,7 +113,11 @@ describe("mode-aware PUCT V3A", () => {
 
     expect(audited.action).toEqual(plain.action);
     expect(audited.rootStats).toEqual(plain.rootStats);
-    expect(audited.diagnostics).toEqual(plain.diagnostics);
+    const { elapsedMs: plainElapsed, ...plainDiagnostics } = plain.diagnostics;
+    const { elapsedMs: auditedElapsed, ...auditedDiagnostics } = audited.diagnostics;
+    expect(plainElapsed).toBeGreaterThanOrEqual(0);
+    expect(auditedElapsed).toBeGreaterThanOrEqual(0);
+    expect(auditedDiagnostics).toEqual(plainDiagnostics);
     expect(audited.rootLeafAudit).toBeDefined();
     expect(audited.rootLeafAudit?.reduce((sum, entry) => sum + entry.total.count, 0)).toBeGreaterThan(0);
   });
