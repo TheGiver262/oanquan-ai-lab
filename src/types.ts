@@ -37,7 +37,7 @@ export type GameState = {
 };
 
 export type PlayerMove = MoveSignature;
-export type MatchFinishReason = "both_quan_empty" | "no_refill" | "repeated_moves";
+export type MatchFinishReason = "both_quan_empty" | "no_refill" | "repeated_moves" | "repeated_position";
 
 export type MoveEvent =
   | { type: "stones_picked"; player: PlayerId; pit: DanPitId; count: number }
