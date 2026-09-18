@@ -3,6 +3,7 @@ import { applyMove, createInitialState, getLegalMoves } from "../engine.js";
 import { MaterialGatedReusableScoreBoundedPuct } from "../research/puct-v3a1.js";
 import { SelectiveQuiescencePuctV4 } from "../research/puct-v4.js";
 import { RefutationOnlyPuctV4B } from "../research/puct-v4b.js";
+import { OpponentRefutationPuctV4C } from "../research/puct-v4c.js";
 import { parseClassicOpening } from "../research/opening-pie-analysis.js";
 import {
   LIVE_QUAN_BALANCED_POSITIONS,
@@ -88,9 +89,11 @@ const result = {
   methodology: {
     stage,
     incumbent: "PUCT V3A.1 material36",
-    candidate: candidateKind === "v4b"
-      ? "PUCT V4B material36 + unstable_refutation_only scoreSwing=10"
-      : "PUCT V4 material36 + selective unstable_one_ply scoreSwing=10",
+    candidate: candidateKind === "v4c"
+      ? "PUCT V4C material36 + unstable_opponent_refutation_only scoreSwing=10"
+      : candidateKind === "v4b"
+        ? "PUCT V4B material36 + unstable_refutation_only scoreSwing=10"
+        : "PUCT V4 material36 + selective unstable_one_ply scoreSwing=10",
     fixedSimulationsPerDecision: fixedSimulations,
     puctExploration: 1.5,
     policyTemperature: 0.6,
@@ -131,9 +134,11 @@ function play(position: Position, candidateSeat: PlayerId): GameResult {
   const startMove = state.moveNumber;
   const limit = position.moveLimit(state);
   const incumbent = new MaterialGatedReusableScoreBoundedPuct();
-  const candidate = candidateKind === "v4b"
-    ? new RefutationOnlyPuctV4B()
-    : new SelectiveQuiescencePuctV4();
+  const candidate = candidateKind === "v4c"
+    ? new OpponentRefutationPuctV4C()
+    : candidateKind === "v4b"
+      ? new RefutationOnlyPuctV4B()
+      : new SelectiveQuiescencePuctV4();
 
   while (state.status === "playing" && state.moveNumber < limit) {
     const isCandidate = state.currentPlayer === candidateSeat;
@@ -275,8 +280,8 @@ function readStage(name: string): StageId {
 }
 
 
-function readCandidate(name: string): "v4" | "v4b" {
+function readCandidate(name: string): "v4" | "v4b" | "v4c" {
   const value = stringArg(name) ?? "v4";
-  if (value === "v4" || value === "v4b") return value;
-  throw new Error(`${name} must be v4|v4b`);
+  if (value === "v4" || value === "v4b" || value === "v4c") return value;
+  throw new Error(`${name} must be v4|v4b|v4c`);
 }
