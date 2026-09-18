@@ -36,7 +36,7 @@ export type ModeAwarePuctV3AOptions = {
    * It does not alter priors, tree selection, exact solved propagation or
    * final root ranking.
    */
-  leafBootstrap?: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only";
+  leafBootstrap?: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only";
   /**
    * V4 research-only selective-quiescence trigger. For unstable_one_ply,
    * bootstrap through already-expanded children only when an immediate child
@@ -167,7 +167,7 @@ const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
 const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
-const DEFAULT_LEAF_BOOTSTRAP: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" = "static";
+const DEFAULT_LEAF_BOOTSTRAP: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only" = "static";
 const DEFAULT_LEAF_QUIESCENCE_SCORE_SWING = 10;
 const REAL_ACTION_REUSE_PLIES = 2;
 
@@ -859,15 +859,25 @@ function heuristicLeafReward(
   engineAgent: ResearchAgentId,
   scoreWeight: number,
   scoreMaterialMax: number,
-  bootstrap: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only",
+  bootstrap: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only",
   quiescenceScoreSwing: number,
 ): number {
   const staticWeight = effectiveLeafScoreWeight(node.state, scoreWeight, scoreMaterialMax);
   const staticValue = normalizedAgentHeuristic(node.state, engineAgent, staticWeight);
   if (bootstrap === "static" || node.children.length === 0) return staticValue;
   if (
-    (bootstrap === "unstable_one_ply" || bootstrap === "unstable_refutation_only")
+    (
+      bootstrap === "unstable_one_ply"
+      || bootstrap === "unstable_refutation_only"
+      || bootstrap === "unstable_opponent_refutation_only"
+    )
     && !isTacticallyUnstableLeaf(node, engineAgent, quiescenceScoreSwing)
+  ) {
+    return staticValue;
+  }
+  if (
+    bootstrap === "unstable_opponent_refutation_only"
+    && currentAgent(node.state) === engineAgent
   ) {
     return staticValue;
   }
@@ -881,7 +891,10 @@ function heuristicLeafReward(
     best = maximizing ? Math.max(best, value) : Math.min(best, value);
   }
   if (!Number.isFinite(best)) return staticValue;
-  return bootstrap === "unstable_refutation_only"
+  return (
+    bootstrap === "unstable_refutation_only"
+    || bootstrap === "unstable_opponent_refutation_only"
+  )
     ? Math.min(staticValue, best)
     : best;
 }
