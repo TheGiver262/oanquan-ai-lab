@@ -127,7 +127,7 @@ console.log(json);
 
 function readMode(name: string): BalanceModeId {
   const value = stringArg(name) ?? "quan-gia-threefold";
-  const allowed: BalanceModeId[] = ["quan-gia-threefold", "quan-gia-pie-threefold", "pie-threefold"];
+  const allowed: BalanceModeId[] = ["quan-gia-threefold", "quan-gia-positional-threefold", "quan-gia-pie-threefold", "pie-threefold"];
   if (allowed.includes(value as BalanceModeId)) return value as BalanceModeId;
   throw new Error(`${name} must be one of ${allowed.join("|")}`);
 }
