@@ -18,6 +18,7 @@ const fixedSimulations = intArg(
 );
 const leafScoreWeight = numberArg("--leaf-score-weight", 1.8);
 const leafBootstrap = readBootstrap("--leaf-bootstrap", "static");
+const leafScoreMaterialMax = numberArg("--leaf-score-material-max", Number.POSITIVE_INFINITY);
 const outPath = stringArg("--out");
 
 const definition = buildCase(caseId);
@@ -27,6 +28,7 @@ const decision = new ModeAwarePuctV3A().chooseAction(definition.state, {
   policyTemperature: 0.6,
   leafScoreWeight,
   leafBootstrap,
+  leafScoreMaterialMax,
   auditRootLeaves: true,
 });
 if (!decision.action || !decision.rootLeafAudit) {
@@ -56,6 +58,7 @@ const result = {
     fixedSimulations,
     leafScoreWeight,
     leafBootstrap,
+    leafScoreMaterialMax,
     puctExploration: 1.5,
     policyTemperature: 0.6,
     policyPriorScoreWeight: 1.8,
