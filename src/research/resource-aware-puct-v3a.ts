@@ -23,6 +23,7 @@ export type ResourceAwarePuctV3AOptions = {
   candidateLimit?: number;
   validateTop?: number;
   rescueUntilBoardMove?: number;
+  rescueDepth?: number;
   maxBoardMoves?: number;
   puctExploration?: number;
   policyTemperature?: number;
@@ -35,6 +36,11 @@ export type ResourceOutcome = {
   boardMoves: number;
   finishReason: string | null;
   trace: string[];
+  rescueChanges: Array<{
+    boardMove: number;
+    primaryAction: string | null;
+    selectedAction: string | null;
+  }>;
 };
 
 export type ResourceCandidateDiagnostic = {
@@ -54,6 +60,7 @@ export type ResourceAwarePuctV3ADecision = ModeAwarePuctV3ADecision & {
     selectedAction: string | null;
     changedAction: boolean;
     candidates: ResourceCandidateDiagnostic[];
+    rescueDepth: number;
   };
 };
 
@@ -64,6 +71,7 @@ const DEFAULT_VALIDATION_SIMULATIONS = 20_000;
 const DEFAULT_CANDIDATE_LIMIT = 10;
 const DEFAULT_VALIDATE_TOP = 4;
 const DEFAULT_RESCUE_UNTIL_BOARD_MOVE = 12;
+const DEFAULT_RESCUE_DEPTH = 2;
 const DEFAULT_MAX_BOARD_MOVES = 240;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
@@ -102,9 +110,27 @@ export class ResourceAwarePuctV3A {
     const candidateLimit = options.candidateLimit ?? DEFAULT_CANDIDATE_LIMIT;
     const validateTop = options.validateTop ?? DEFAULT_VALIDATE_TOP;
     const rescueUntilBoardMove = options.rescueUntilBoardMove ?? DEFAULT_RESCUE_UNTIL_BOARD_MOVE;
+    const rescueDepth = options.rescueDepth ?? DEFAULT_RESCUE_DEPTH;
     const maxBoardMoves = options.maxBoardMoves ?? DEFAULT_MAX_BOARD_MOVES;
     const puctExploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
+
+    if (!Number.isSafeInteger(rescueDepth) || rescueDepth < 1) {
+      throw new Error("rescueDepth must be a positive integer");
+    }
+
+    const recursiveOptions: ResourceAwarePuctV3AOptions = {
+      primarySimulations,
+      forecastSimulations,
+      probeSimulations,
+      validationSimulations,
+      candidateLimit,
+      validateTop,
+      rescueUntilBoardMove,
+      maxBoardMoves,
+      puctExploration,
+      policyTemperature,
+    };
 
     const primaryDecision = this.primary.chooseAction(state, {
       simulations: primarySimulations,
@@ -121,6 +147,7 @@ export class ResourceAwarePuctV3A {
       selectedAction: primaryAction ? balanceActionKey(primaryAction) : null,
       changedAction: false,
       candidates: [] as ResourceCandidateDiagnostic[],
+      rescueDepth,
     };
 
     if (
@@ -140,6 +167,8 @@ export class ResourceAwarePuctV3A {
       maxBoardMoves,
       puctExploration,
       policyTemperature,
+      0,
+      recursiveOptions,
     );
 
     if ((primaryForecast.value ?? -2) >= 0) {
@@ -168,6 +197,8 @@ export class ResourceAwarePuctV3A {
           maxBoardMoves,
           puctExploration,
           policyTemperature,
+          Math.max(0, rescueDepth - 1),
+          recursiveOptions,
         );
         return {
           stat: entry,
@@ -195,6 +226,8 @@ export class ResourceAwarePuctV3A {
         maxBoardMoves,
         puctExploration,
         policyTemperature,
+        Math.max(0, rescueDepth - 1),
+        recursiveOptions,
       );
       candidate.diagnostic.validation = validation;
     }
@@ -227,6 +260,7 @@ export class ResourceAwarePuctV3A {
         selectedAction: selectedKey,
         changedAction: selectedKey !== balanceActionKey(primaryAction),
         candidates: candidates.map((entry) => entry.diagnostic),
+        rescueDepth,
       },
     };
   }
@@ -240,6 +274,8 @@ function rolloutAfterAction(
   maxBoardMoves: number,
   puctExploration: number,
   policyTemperature: number,
+  futureRescues: number,
+  nestedOptions: ResourceAwarePuctV3AOptions,
 ): ResourceOutcome {
   const applied = applyBalanceAction(state, action);
   if (!applied.ok) {
@@ -250,6 +286,7 @@ function rolloutAfterAction(
       boardMoves: state.game.moveNumber,
       finishReason: null,
       trace: [`ILLEGAL:${balanceActionKey(action)}`],
+      rescueChanges: [],
     };
   }
 
@@ -258,6 +295,9 @@ function rolloutAfterAction(
     A: new ModeAwarePuctV3A(),
     B: new ModeAwarePuctV3A(),
   };
+  const rescueEngine = futureRescues > 0 ? new ResourceAwarePuctV3A() : null;
+  let remainingRescues = futureRescues;
+  const rescueChanges: ResourceOutcome["rescueChanges"] = [];
   const trace = [balanceActionKey(action)];
   let finishReason: string | null = null;
 
@@ -267,14 +307,48 @@ function rolloutAfterAction(
 
   while (cursor.game.status === "playing" && cursor.game.moveNumber < maxBoardMoves) {
     const agent = currentAgent(cursor);
-    const decision = engines[agent].chooseAction(cursor, {
-      simulations,
-      puctExploration,
-      policyTemperature,
-    });
-    if (!decision.action) break;
-    if (trace.length < 16) trace.push(balanceActionKey(decision.action));
-    const next = applyBalanceAction(cursor, decision.action);
+    let nextAction: BalanceAction | null = null;
+
+    if (
+      agent === seeker
+      && rescueEngine
+      && remainingRescues > 0
+      && cursor.game.moveNumber <= (nestedOptions.rescueUntilBoardMove ?? DEFAULT_RESCUE_UNTIL_BOARD_MOVE)
+    ) {
+      const nestedBudget = Math.max(1, simulations);
+      const resourceDecision = rescueEngine.chooseAction(cursor, {
+        primarySimulations: Math.min(nestedOptions.primarySimulations ?? nestedBudget, nestedBudget),
+        forecastSimulations: Math.min(nestedOptions.forecastSimulations ?? nestedBudget, nestedBudget),
+        probeSimulations: Math.min(nestedOptions.probeSimulations ?? nestedBudget, nestedBudget),
+        validationSimulations: Math.min(nestedOptions.validationSimulations ?? nestedBudget, nestedBudget),
+        candidateLimit: nestedOptions.candidateLimit,
+        validateTop: nestedOptions.validateTop,
+        rescueUntilBoardMove: nestedOptions.rescueUntilBoardMove,
+        rescueDepth: remainingRescues,
+        maxBoardMoves,
+        puctExploration,
+        policyTemperature,
+      });
+      nextAction = resourceDecision.action;
+      if (resourceDecision.rescueDiagnostics.changedAction) {
+        rescueChanges.push({
+          boardMove: cursor.game.moveNumber,
+          primaryAction: resourceDecision.rescueDiagnostics.primaryAction,
+          selectedAction: resourceDecision.rescueDiagnostics.selectedAction,
+        });
+        remainingRescues -= 1;
+      }
+    } else {
+      nextAction = engines[agent].chooseAction(cursor, {
+        simulations,
+        puctExploration,
+        policyTemperature,
+      }).action;
+    }
+
+    if (!nextAction) break;
+    if (trace.length < 24) trace.push(balanceActionKey(nextAction));
+    const next = applyBalanceAction(cursor, nextAction);
     if (!next.ok) {
       return {
         unresolved: true,
@@ -282,7 +356,8 @@ function rolloutAfterAction(
         margin: null,
         boardMoves: cursor.game.moveNumber,
         finishReason: null,
-        trace: [...trace, `ILLEGAL:${balanceActionKey(decision.action)}`],
+        trace: [...trace, `ILLEGAL:${balanceActionKey(nextAction)}`],
+        rescueChanges,
       };
     }
     for (const event of next.events) {
@@ -299,6 +374,7 @@ function rolloutAfterAction(
       boardMoves: cursor.game.moveNumber,
       finishReason,
       trace,
+      rescueChanges,
     };
   }
 
@@ -313,6 +389,7 @@ function rolloutAfterAction(
     boardMoves: cursor.game.moveNumber,
     finishReason,
     trace,
+    rescueChanges,
   };
 }
 
