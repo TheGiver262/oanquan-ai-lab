@@ -24,6 +24,12 @@ export type ModeAwarePuctV3AOptions = {
    * were produced. This must not alter selection, expansion, backup or ranking.
    */
   auditRootLeaves?: boolean;
+  /**
+   * Research-only leaf-value ablation. The incumbent V3A value is 1.8.
+   * This coefficient affects leaf evaluation only; policy priors stay frozen
+   * to the incumbent 1.8 score weight so experiments isolate value estimation.
+   */
+  leafScoreWeight?: number;
 };
 
 export type ModeAwarePuctV3ALeafSource =
@@ -140,6 +146,7 @@ type MutableRootLeafAudit = {
 const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
+const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
 const REAL_ACTION_REUSE_PLIES = 2;
 
 const REFLECT_PIT: Readonly<Record<PitId, PitId>> = Object.freeze({
@@ -214,8 +221,12 @@ export class ModeAwarePuctV3A {
     const deadline = started + (options.timeBudgetMs ?? Number.POSITIVE_INFINITY);
     const exploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
+    const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
+    if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
+      throw new Error("leafScoreWeight must be a finite non-negative number");
+    }
 
     let simulations = 0;
     let expandedNodes = 0;
@@ -262,7 +273,11 @@ export class ModeAwarePuctV3A {
         if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, path.length);
       }
 
-      const reward = node.solvedOutcome ?? normalizedAgentHeuristic(node.state, this.engineAgent);
+      const reward = node.solvedOutcome ?? normalizedAgentHeuristic(
+        node.state,
+        this.engineAgent,
+        leafScoreWeight,
+      );
       if (rootLeafAudit && path.length > 1) {
         const rootChild = path[1];
         if (rootChild) {
@@ -282,6 +297,7 @@ export class ModeAwarePuctV3A {
             node.state.game.status === "finished" ? node.solvedOutcome : null,
             node.state,
             this.engineAgent as ResearchAgentId,
+            leafScoreWeight,
           );
         }
       }
@@ -492,6 +508,7 @@ function recordRootLeafAudit(
   terminalOutcomeValue: SolvedOutcome,
   leafState: BalanceState,
   engineAgent: ResearchAgentId,
+  leafScoreWeight: number,
 ): void {
   let audit = audits.get(child);
   if (!audit) {
@@ -504,7 +521,7 @@ function recordRootLeafAudit(
   else if (source === "solved_nonterminal") addLeafSample(audit.solvedNonterminal, reward, depth);
   else {
     addLeafSample(audit.heuristic, reward, depth);
-    const breakdown = agentHeuristicBreakdown(leafState, engineAgent);
+    const breakdown = agentHeuristicBreakdown(leafState, engineAgent, leafScoreWeight);
     audit.heuristicComponentCount += 1;
     audit.heuristicScoreDeltaSum += breakdown.scoreDelta;
     audit.heuristicSideDeltaSum += breakdown.sideDelta;
@@ -714,7 +731,11 @@ function heuristicPolicyPriors(
   const sign = currentAgent(state) === engineAgent ? 1 : -1;
   const scored = actions.map((action) => {
     const result = applyBalanceAction(state, action);
-    const score = result.ok ? sign * normalizedAgentHeuristic(result.state, engineAgent) : -1;
+    // Keep policy priors frozen to incumbent V3A. leafScoreWeight is a
+    // value-estimation experiment only and must not alter action priors.
+    const score = result.ok
+      ? sign * normalizedAgentHeuristic(result.state, engineAgent, DEFAULT_LEAF_SCORE_WEIGHT)
+      : -1;
     return { action, score };
   });
   const maxScore = Math.max(...scored.map((entry) => entry.score));
@@ -729,7 +750,11 @@ function heuristicPolicyPriors(
   );
 }
 
-function agentHeuristicBreakdown(state: BalanceState, agent: ResearchAgentId): {
+function agentHeuristicBreakdown(
+  state: BalanceState,
+  agent: ResearchAgentId,
+  scoreWeight = DEFAULT_LEAF_SCORE_WEIGHT,
+): {
   scoreDelta: number;
   sideDelta: number;
   mobilityDelta: number;
@@ -754,7 +779,7 @@ function agentHeuristicBreakdown(state: BalanceState, agent: ResearchAgentId): {
   const sideDelta = sideStones(state.game, seat) - sideStones(state.game, opponentSeat);
   const mobilityDelta = playablePits(state.game, seat) - playablePits(state.game, opponentSeat);
   const refillDelta = refillSafety(state.game, seat) - refillSafety(state.game, opponentSeat);
-  const material = scoreDelta * 1.8 + sideDelta * 0.45 + mobilityDelta * 0.8 + refillDelta * 2.5;
+  const material = scoreDelta * scoreWeight + sideDelta * 0.45 + mobilityDelta * 0.8 + refillDelta * 2.5;
   return {
     scoreDelta,
     sideDelta,
@@ -765,8 +790,12 @@ function agentHeuristicBreakdown(state: BalanceState, agent: ResearchAgentId): {
   };
 }
 
-function normalizedAgentHeuristic(state: BalanceState, agent: ResearchAgentId): number {
-  return agentHeuristicBreakdown(state, agent).value;
+function normalizedAgentHeuristic(
+  state: BalanceState,
+  agent: ResearchAgentId,
+  scoreWeight = DEFAULT_LEAF_SCORE_WEIGHT,
+): number {
+  return agentHeuristicBreakdown(state, agent, scoreWeight).value;
 }
 
 function sideStones(state: GameState, player: PlayerId): number {
