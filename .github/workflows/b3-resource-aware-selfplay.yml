@@ -30,8 +30,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        opening: ["B3:CW","B3:CCW"]
-        opener: ["A","B"]
+        include:
+          - id: b3-cw-a
+            opening: "B3:CW"
+            opener: "A"
+          - id: b3-cw-b
+            opening: "B3:CW"
+            opener: "B"
+          - id: b3-ccw-a
+            opening: "B3:CCW"
+            opener: "A"
+          - id: b3-ccw-b
+            opening: "B3:CCW"
+            opener: "B"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,7 +69,7 @@ jobs:
             --out result.json
       - uses: actions/upload-artifact@v4
         with:
-          name: resource-${{ matrix.opener }}-${{ matrix.opening }}
+          name: resource-${{ matrix.id }}
           path: result.json
           retention-days: 7
 
