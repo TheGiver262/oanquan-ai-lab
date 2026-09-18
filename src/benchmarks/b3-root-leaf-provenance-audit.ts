@@ -131,6 +131,7 @@ function summarize(
     ...stats,
     auditCount: audit.total.count,
     auditMeanReward: audit.total.meanReward,
+    total: audit.total,
     cycle: {
       ...audit.cycle,
       fraction: audit.cycle.count / total,
