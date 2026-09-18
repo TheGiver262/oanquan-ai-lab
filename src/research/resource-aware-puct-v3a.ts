@@ -216,7 +216,9 @@ export class ResourceAwarePuctV3A {
     candidates.sort((left, right) => compareOutcomes(right.diagnostic.probe, left.diagnostic.probe));
 
     let selectedAction = primaryAction;
-    const top = candidates.slice(0, Math.max(0, validateTop));
+    const top = candidates
+      .filter((entry) => (entry.diagnostic.probe.value ?? -2) >= 0)
+      .slice(0, Math.max(0, validateTop));
     for (const candidate of top) {
       const validation = rolloutAfterAction(
         state,
@@ -336,6 +338,7 @@ function rolloutAfterAction(
         .sort((left, right) => compareOutcomes(right.outcome, left.outcome));
 
       const validated = probes
+        .filter((entry) => (entry.outcome.value ?? -2) >= 0)
         .slice(0, Math.max(0, validateTop))
         .map((entry) => ({
           action: entry.action,
