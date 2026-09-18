@@ -1,0 +1,48 @@
+name: b3-root-cause-pinpoint
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/b3-root-cause-pinpoint.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  pinpoint:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Pinpoint B5 optimistic subtree at 99,066
+        run: |
+          npx tsx src/benchmarks/b3-root-leaf-provenance-audit.ts \
+            --opening B3:CW \
+            --opener-agent A \
+            --target-board-move 2 \
+            --fixed-simulations 99066 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-root-cause-pinpoint-99066
+          path: result.json
+          retention-days: 7
