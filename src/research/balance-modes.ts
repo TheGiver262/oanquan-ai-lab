@@ -18,6 +18,7 @@ export type BalanceModeId =
   | "open-pie-threefold"
   | "quan-gia"
   | "quan-gia-threefold"
+  | "quan-gia-positional-threefold"
   | "quan-gia-pie-threefold";
 
 export type SeatToAgent = Readonly<Record<PlayerId, ResearchAgentId>>;
@@ -38,6 +39,11 @@ export type BalanceState = Readonly<{
   game: GameState;
   seatToAgent: SeatToAgent;
   swap: SwapState;
+  /**
+   * Exact start-of-turn strategic positions seen so far. Populated only by
+   * positional-repetition research modes; omitted/empty elsewhere.
+   */
+  positionalHistory?: readonly string[];
 }>;
 
 export type BalanceAction =
@@ -58,7 +64,7 @@ export function createBalanceInitialState(
   mode: BalanceModeId,
   openerAgent: ResearchAgentId = "A",
 ): BalanceState {
-  const ruleset = mode === "quan-gia"
+  const ruleset = mode === "quan-gia" || mode === "quan-gia-positional-threefold"
     ? MATURE_QUAN_RULESET
     : mode === "quan-gia-threefold" || mode === "quan-gia-pie-threefold"
       ? MATURE_QUAN_THREEFOLD_RULESET
@@ -67,12 +73,14 @@ export function createBalanceInitialState(
         : CLASSIC_STANDARD_RULESET;
   const responderAgent = otherResearchAgent(openerAgent);
   const seatToAgent: SeatToAgent = Object.freeze({ P0: openerAgent, P1: responderAgent });
+  const game = createInitialState(ruleset);
 
   return {
     mode,
-    game: createInitialState(ruleset),
+    game,
     seatToAgent,
     swap: initialSwapState(mode, responderAgent),
+    positionalHistory: modeUsesPositionalThreefold(mode) ? [positionalRepetitionKey(game)] : [],
   };
 }
 
@@ -83,6 +91,10 @@ export function modeUsesThreefold(mode: BalanceModeId): boolean {
     || mode === "open-pie-threefold"
     || mode === "quan-gia-threefold"
     || mode === "quan-gia-pie-threefold";
+}
+
+export function modeUsesPositionalThreefold(mode: BalanceModeId): boolean {
+  return mode === "quan-gia-positional-threefold";
 }
 
 export function modeHasSwap(mode: BalanceModeId): boolean {
@@ -154,19 +166,36 @@ export function applyBalanceAction(state: BalanceState, action: BalanceAction): 
   const applied = applyMove(state.game, action.move);
   if (!applied.ok) return { ok: false, error: applied.error };
 
+  const nextGame = applied.state;
+  const nextEvents = [...applied.events];
+  let positionalHistory = state.positionalHistory ?? [];
+
+  if (modeUsesPositionalThreefold(state.mode) && nextGame.status === "playing") {
+    const positionKey = positionalRepetitionKey(nextGame);
+    const priorOccurrences = positionalHistory.reduce(
+      (count, key) => count + (key === positionKey ? 1 : 0),
+      0,
+    );
+    positionalHistory = [...positionalHistory, positionKey];
+    if (priorOccurrences + 1 >= 3) {
+      finishByPositionalRepetition(nextGame, nextEvents);
+    }
+  }
+
   return {
     ok: true,
     state: {
       ...state,
-      game: applied.state,
+      game: nextGame,
       swap: actor === state.swap.responderAgent && state.swap.enabled && !state.swap.used
         ? {
             ...state.swap,
             responderNormalMovesTaken: state.swap.responderNormalMovesTaken + 1,
           }
         : state.swap,
+      positionalHistory,
     },
-    events: applied.events,
+    events: nextEvents,
   };
 }
 
@@ -189,6 +218,7 @@ export function cloneBalanceState(state: BalanceState): BalanceState {
     },
     seatToAgent: { ...state.seatToAgent },
     swap: { ...state.swap },
+    positionalHistory: state.positionalHistory ? [...state.positionalHistory] : [],
   };
 }
 
@@ -240,4 +270,62 @@ function initialSwapState(mode: BalanceModeId, responderAgent: ResearchAgentId):
 
 function otherResearchAgent(agent: ResearchAgentId): ResearchAgentId {
   return agent === "A" ? "B" : "A";
+}
+
+
+const POSITION_REFLECT_PIT: Readonly<Record<string, string>> = Object.freeze({
+  L: "R",
+  R: "L",
+  T1: "T5",
+  T2: "T4",
+  T3: "T3",
+  T4: "T2",
+  T5: "T1",
+  B1: "B5",
+  B2: "B4",
+  B3: "B3",
+  B4: "B2",
+  B5: "B1",
+});
+
+export function positionalRepetitionKey(game: GameState): string {
+  return JSON.stringify([
+    game.currentPlayer,
+    game.scores.P0,
+    game.scores.P1,
+    game.pits.map((pit) => [pit.id, pit.stones, pit.quanStones]),
+  ]);
+}
+
+export function reflectPositionalRepetitionKey(key: string): string {
+  const parsed = JSON.parse(key) as [
+    PlayerId,
+    number,
+    number,
+    Array<[string, number, number]>,
+  ];
+  const [currentPlayer, p0Score, p1Score, pits] = parsed;
+  const byId = new Map(pits.map((entry) => [entry[0], entry] as const));
+  const reflectedPits = pits.map(([targetId]) => {
+    const sourceId = POSITION_REFLECT_PIT[targetId];
+    const source = sourceId ? byId.get(sourceId) : undefined;
+    if (!source) throw new Error(`Cannot reflect positional repetition pit ${targetId}`);
+    return [targetId, source[1], source[2]] as [string, number, number];
+  });
+  return JSON.stringify([currentPlayer, p0Score, p1Score, reflectedPits]);
+}
+
+function finishByPositionalRepetition(game: GameState, events: MoveEvent[]): void {
+  for (const pit of game.pits) {
+    if (pit.kind !== "dan" || pit.owner === null) continue;
+    game.scores[pit.owner] += pit.stones;
+    pit.stones = 0;
+  }
+  game.status = "finished";
+  game.winner = game.scores.P0 === game.scores.P1
+    ? null
+    : game.scores.P0 > game.scores.P1
+      ? "P0"
+      : "P1";
+  events.push({ type: "match_finished", winner: game.winner, reason: "repeated_position" });
 }
