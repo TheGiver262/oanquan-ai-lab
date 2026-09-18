@@ -59,6 +59,15 @@ export type ModeAwarePuctV3ARootLeafAudit = {
   terminalWins: number;
   terminalDraws: number;
   terminalLosses: number;
+  heuristicComponents: {
+    count: number;
+    meanScoreDelta: number;
+    meanSideDelta: number;
+    meanMobilityDelta: number;
+    meanRefillDelta: number;
+    meanMaterial: number;
+    meanValue: number;
+  };
 };
 
 export type ModeAwarePuctV3ADiagnostics = {
@@ -119,6 +128,13 @@ type MutableRootLeafAudit = {
   terminalWins: number;
   terminalDraws: number;
   terminalLosses: number;
+  heuristicComponentCount: number;
+  heuristicScoreDeltaSum: number;
+  heuristicSideDeltaSum: number;
+  heuristicMobilityDeltaSum: number;
+  heuristicRefillDeltaSum: number;
+  heuristicMaterialSum: number;
+  heuristicValueSum: number;
 };
 
 const DEFAULT_SIMULATIONS = 100_000;
@@ -264,6 +280,8 @@ export class ModeAwarePuctV3A {
             reward,
             path.length - 1,
             node.state.game.status === "finished" ? node.solvedOutcome : null,
+            node.state,
+            this.engineAgent as ResearchAgentId,
           );
         }
       }
@@ -447,6 +465,13 @@ function makeMutableRootLeafAudit(): MutableRootLeafAudit {
     terminalWins: 0,
     terminalDraws: 0,
     terminalLosses: 0,
+    heuristicComponentCount: 0,
+    heuristicScoreDeltaSum: 0,
+    heuristicSideDeltaSum: 0,
+    heuristicMobilityDeltaSum: 0,
+    heuristicRefillDeltaSum: 0,
+    heuristicMaterialSum: 0,
+    heuristicValueSum: 0,
   };
 }
 
@@ -465,6 +490,8 @@ function recordRootLeafAudit(
   reward: number,
   depth: number,
   terminalOutcomeValue: SolvedOutcome,
+  leafState: BalanceState,
+  engineAgent: ResearchAgentId,
 ): void {
   let audit = audits.get(child);
   if (!audit) {
@@ -475,7 +502,17 @@ function recordRootLeafAudit(
   if (source === "cycle") addLeafSample(audit.cycle, reward, depth);
   else if (source === "terminal") addLeafSample(audit.terminal, reward, depth);
   else if (source === "solved_nonterminal") addLeafSample(audit.solvedNonterminal, reward, depth);
-  else addLeafSample(audit.heuristic, reward, depth);
+  else {
+    addLeafSample(audit.heuristic, reward, depth);
+    const breakdown = agentHeuristicBreakdown(leafState, engineAgent);
+    audit.heuristicComponentCount += 1;
+    audit.heuristicScoreDeltaSum += breakdown.scoreDelta;
+    audit.heuristicSideDeltaSum += breakdown.sideDelta;
+    audit.heuristicMobilityDeltaSum += breakdown.mobilityDelta;
+    audit.heuristicRefillDeltaSum += breakdown.refillDelta;
+    audit.heuristicMaterialSum += breakdown.material;
+    audit.heuristicValueSum += breakdown.value;
+  }
 
   if (source === "terminal") {
     if (terminalOutcomeValue === 1) audit.terminalWins += 1;
@@ -521,6 +558,15 @@ function serializeRootLeafAudit(
     terminalWins: audit.terminalWins,
     terminalDraws: audit.terminalDraws,
     terminalLosses: audit.terminalLosses,
+    heuristicComponents: {
+      count: audit.heuristicComponentCount,
+      meanScoreDelta: audit.heuristicComponentCount > 0 ? audit.heuristicScoreDeltaSum / audit.heuristicComponentCount : 0,
+      meanSideDelta: audit.heuristicComponentCount > 0 ? audit.heuristicSideDeltaSum / audit.heuristicComponentCount : 0,
+      meanMobilityDelta: audit.heuristicComponentCount > 0 ? audit.heuristicMobilityDeltaSum / audit.heuristicComponentCount : 0,
+      meanRefillDelta: audit.heuristicComponentCount > 0 ? audit.heuristicRefillDeltaSum / audit.heuristicComponentCount : 0,
+      meanMaterial: audit.heuristicComponentCount > 0 ? audit.heuristicMaterialSum / audit.heuristicComponentCount : 0,
+      meanValue: audit.heuristicComponentCount > 0 ? audit.heuristicValueSum / audit.heuristicComponentCount : 0,
+    },
   };
 }
 
@@ -683,8 +729,25 @@ function heuristicPolicyPriors(
   );
 }
 
-function normalizedAgentHeuristic(state: BalanceState, agent: ResearchAgentId): number {
-  if (state.game.status === "finished") return terminalAgentOutcome(state, agent);
+function agentHeuristicBreakdown(state: BalanceState, agent: ResearchAgentId): {
+  scoreDelta: number;
+  sideDelta: number;
+  mobilityDelta: number;
+  refillDelta: number;
+  material: number;
+  value: number;
+} {
+  if (state.game.status === "finished") {
+    const value = terminalAgentOutcome(state, agent);
+    return {
+      scoreDelta: 0,
+      sideDelta: 0,
+      mobilityDelta: 0,
+      refillDelta: 0,
+      material: value === 0 ? 0 : value * Number.POSITIVE_INFINITY,
+      value,
+    };
+  }
   const seat = seatForAgent(state, agent);
   const opponentSeat = otherPlayer(seat);
   const scoreDelta = state.game.scores[seat] - state.game.scores[opponentSeat];
@@ -692,7 +755,18 @@ function normalizedAgentHeuristic(state: BalanceState, agent: ResearchAgentId): 
   const mobilityDelta = playablePits(state.game, seat) - playablePits(state.game, opponentSeat);
   const refillDelta = refillSafety(state.game, seat) - refillSafety(state.game, opponentSeat);
   const material = scoreDelta * 1.8 + sideDelta * 0.45 + mobilityDelta * 0.8 + refillDelta * 2.5;
-  return Math.tanh(material / 18);
+  return {
+    scoreDelta,
+    sideDelta,
+    mobilityDelta,
+    refillDelta,
+    material,
+    value: Math.tanh(material / 18),
+  };
+}
+
+function normalizedAgentHeuristic(state: BalanceState, agent: ResearchAgentId): number {
+  return agentHeuristicBreakdown(state, agent).value;
 }
 
 function sideStones(state: GameState, player: PlayerId): number {
