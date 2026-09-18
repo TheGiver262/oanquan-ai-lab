@@ -12,6 +12,7 @@ import {
   currentAgent,
   getBalanceActions,
   isSwapEligible,
+  positionalRepetitionKey,
   seatForAgent,
   type BalanceState,
 } from "../src/research/balance-modes.js";
@@ -23,6 +24,7 @@ describe("balance mode semantics", () => {
     const delayed = createBalanceInitialState("delayed-pie-4-threefold");
     const open = createBalanceInitialState("open-pie-threefold");
     const quanGia = createBalanceInitialState("quan-gia");
+    const positional = createBalanceInitialState("quan-gia-positional-threefold");
 
     expect(standard.game.ruleset.repetitionPolicy ?? "none").toBe("none");
     expect(pie.game.ruleset.repetitionPolicy).toBe("threefold");
@@ -30,6 +32,9 @@ describe("balance mode semantics", () => {
     expect(open.game.ruleset.repetitionPolicy).toBe("threefold");
     expect(quanGia.game.ruleset.ruleProfileId).toBe("mature_quan_v1");
     expect(quanGia.game.ruleset.repetitionPolicy ?? "none").toBe("none");
+    expect(positional.game.ruleset.ruleProfileId).toBe("mature_quan_v1");
+    expect(positional.game.ruleset.repetitionPolicy ?? "none").toBe("none");
+    expect(positional.positionalHistory).toHaveLength(1);
   });
 
   it("offers classic Pie only to original responder B at the first response", () => {
@@ -142,6 +147,34 @@ describe("balance mode semantics", () => {
     expect(standard.ok).toBe(true);
     if (!standard.ok) return;
     expect(standard.events.some((event) => event.type === "match_finished" && event.reason === "repeated_moves")).toBe(false);
+  });
+
+  it("Positional Threefold finishes on the third exact start-of-turn strategic position", () => {
+    const initial = createBalanceInitialState("quan-gia-positional-threefold");
+    const move = getBalanceActions(initial).find(
+      (action) => action.kind === "move" && action.move.pit === "B1" && action.move.dir === "CW",
+    );
+    expect(move).toBeDefined();
+    if (!move) return;
+
+    const first = applyBalanceAction(initial, move);
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const repeatedKey = positionalRepetitionKey(first.state.game);
+
+    const primed = {
+      ...initial,
+      positionalHistory: [repeatedKey, repeatedKey],
+    };
+    const third = applyBalanceAction(primed, move);
+    expect(third.ok).toBe(true);
+    if (!third.ok) return;
+
+    expect(third.state.game.status).toBe("finished");
+    expect(third.events.some(
+      (event) => event.type === "match_finished" && event.reason === "repeated_position",
+    )).toBe(true);
+    expect(third.state.game.pits.filter((pit) => pit.kind === "quan").every((pit) => pit.quanStones === 1)).toBe(true);
   });
 
   it("Quan Gia blocks a live Quan capture below 5 dan and allows it at 5 dan", () => {
