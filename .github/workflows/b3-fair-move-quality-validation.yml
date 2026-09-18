@@ -1,0 +1,180 @@
+name: b3-fair-move-quality-validation
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/b3-fair-move-quality-validation.yml"
+      - "src/benchmarks/b3-fair-move-quality-validation.ts"
+      - "src/research/resource-aware-puct-v3a.ts"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/research/balance-modes.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  validate:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: b20000-b3-cw-a
+            budget: 20000
+            opening: "B3:CW"
+            opener: "A"
+          - id: b20000-b3-cw-b
+            budget: 20000
+            opening: "B3:CW"
+            opener: "B"
+          - id: b20000-b3-ccw-a
+            budget: 20000
+            opening: "B3:CCW"
+            opener: "A"
+          - id: b20000-b3-ccw-b
+            budget: 20000
+            opening: "B3:CCW"
+            opener: "B"
+          - id: b50000-b3-cw-a
+            budget: 50000
+            opening: "B3:CW"
+            opener: "A"
+          - id: b50000-b3-cw-b
+            budget: 50000
+            opening: "B3:CW"
+            opener: "B"
+          - id: b50000-b3-ccw-a
+            budget: 50000
+            opening: "B3:CCW"
+            opener: "A"
+          - id: b50000-b3-ccw-b
+            budget: 50000
+            opening: "B3:CCW"
+            opener: "B"
+          - id: b100000-b3-cw-a
+            budget: 100000
+            opening: "B3:CW"
+            opener: "A"
+          - id: b100000-b3-cw-b
+            budget: 100000
+            opening: "B3:CW"
+            opener: "B"
+          - id: b100000-b3-ccw-a
+            budget: 100000
+            opening: "B3:CCW"
+            opener: "A"
+          - id: b100000-b3-ccw-b
+            budget: 100000
+            opening: "B3:CCW"
+            opener: "B"
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Compare baseline and discovered move under equal continuation compute
+        run: |
+          npx tsx src/benchmarks/b3-fair-move-quality-validation.ts \
+            --opening "${{ matrix.opening }}" \
+            --opener-agent "${{ matrix.opener }}" \
+            --target-board-move 4 \
+            --fixed-simulations "${{ matrix.budget }}" \
+            --discovery-primary 5000 \
+            --discovery-forecast 5000 \
+            --discovery-probe 1000 \
+            --discovery-validation 5000 \
+            --discovery-candidate-limit 3 \
+            --discovery-validate-top 2 \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fair-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: validate
+    if: always() && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fair-*
+          path: results
+      - name: Build fair-validation summary and integrity checks
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          rows.sort(key=lambda d:(d["methodology"]["fixedSimulationsPerContinuationDecision"],d["methodology"]["opening"],d["methodology"]["openerAgent"]))
+
+          def sig(o):
+              return (o["openerValue"],o["openerMargin"],o["boardMoves"],o["finalScores"]["P0"],o["finalScores"]["P1"])
+          by={(r["methodology"]["fixedSimulationsPerContinuationDecision"],r["methodology"]["opening"],r["methodology"]["openerAgent"]):r for r in rows}
+          reflection=[]
+          identity=[]
+          for budget in sorted(set(r["methodology"]["fixedSimulationsPerContinuationDecision"] for r in rows)):
+              for agent in ("A","B"):
+                  cw=by[(budget,"B3:CW",agent)]
+                  ccw=by[(budget,"B3:CCW",agent)]
+                  if sig(cw["branches"]["baseline"]) != sig(ccw["branches"]["baseline"]):
+                      reflection.append((budget,agent,"baseline"))
+                  if sig(cw["branches"]["candidate"]) != sig(ccw["branches"]["candidate"]):
+                      reflection.append((budget,agent,"candidate"))
+              for opening in ("B3:CW","B3:CCW"):
+                  a=by[(budget,opening,"A")]
+                  b=by[(budget,opening,"B")]
+                  if (a["branches"]["baseline"]["openerValue"],a["branches"]["baseline"]["openerMargin"]) != (b["branches"]["baseline"]["openerValue"],b["branches"]["baseline"]["openerMargin"]):
+                      identity.append((budget,opening,"baseline"))
+                  if (a["branches"]["candidate"]["openerValue"],a["branches"]["candidate"]["openerMargin"]) != (b["branches"]["candidate"]["openerValue"],b["branches"]["candidate"]["openerMargin"]):
+                      identity.append((budget,opening,"candidate"))
+
+          md=["# B3 fair move-quality validation","",
+              "ResourceAware is used only to propose the candidate move at board move 4. After the branch move, BOTH candidate and baseline branches use fresh vanilla reflection-canonical V3A for both players with exactly the same fixed simulations/decision. Discovery compute is therefore not evidence of search strength; this experiment measures move quality only.","",
+              f"- Games/branch pairs: **{len(rows)}/12**",
+              f"- Reflection mismatches: **{len(reflection)}**",
+              f"- A/B identity mismatches: **{len(identity)}**","",
+              "| budget | opening | opener id | baseline action | candidate action | rank | baseline result | baseline margin | candidate result | candidate margin | delta margin |",
+              "|---:|---|---|---|---|---:|---|---:|---|---:|---:|"]
+          for r in rows:
+              m=r["methodology"]; t=r["target"]; b=r["branches"]["baseline"]; c=r["branches"]["candidate"]
+              def lab(o):
+                  if o["unresolved"]: return "U"
+                  if o["openerValue"]==1:return "OW"
+                  if o["openerValue"]==0:return "D"
+                  return "RW"
+              md.append(f'| {m["fixedSimulationsPerContinuationDecision"]} | {m["opening"]} | {m["openerAgent"]} | {t["baselineAction"]} | {t["candidateAction"]} | {t["baselineRootRankOfCandidate"]} | {lab(b)} | {b["openerMargin"]} | {lab(c)} | {c["openerMargin"]} | {r["delta"]["openerMargin"]} |')
+          report={"rows":rows,"reflectionMismatches":reflection,"identityMismatches":identity}
+          open("b3-fair-move-quality-summary.md","w",encoding="utf-8").write("\n".join(md)+"\n")
+          json.dump(report,open("b3-fair-move-quality-summary.json","w",encoding="utf-8"),indent=2)
+          print("\n".join(md))
+          if reflection or identity:
+              raise SystemExit("integrity check failed")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-fair-move-quality-summary
+          path: |
+            b3-fair-move-quality-summary.md
+            b3-fair-move-quality-summary.json
+          retention-days: 7
