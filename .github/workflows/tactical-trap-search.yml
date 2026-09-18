@@ -1,0 +1,135 @@
+name: tactical-trap-search
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - "src/benchmarks/tactical-trap-search.ts"
+      - ".github/workflows/tactical-trap-search.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/research/balance-modes.ts"
+      - "src/engine.ts"
+      - "src/types.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  scan:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: qg3f-b1-cw
+            mode: quan-gia-threefold
+            opening: B1:CW
+          - id: qg3f-b3-cw
+            mode: quan-gia-threefold
+            opening: B3:CW
+          - id: qgpie-b1-cw
+            mode: quan-gia-pie-threefold
+            opening: B1:CW
+          - id: qgpie-b2-cw
+            mode: quan-gia-pie-threefold
+            opening: B2:CW
+          - id: pie-b1-cw
+            mode: pie-threefold
+            opening: B1:CW
+          - id: pie-b1-ccw
+            mode: pie-threefold
+            opening: B1:CCW
+          - id: pie-b2-cw
+            mode: pie-threefold
+            opening: B2:CW
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - name: Scan low-rated deviations and validate top reversals
+        run: |
+          npx tsx src/benchmarks/tactical-trap-search.ts \
+            --mode "${{ matrix.mode }}" \
+            --opening "${{ matrix.opening }}" \
+            --opener-agent A \
+            --baseline-simulations 20000 \
+            --probe-simulations 2000 \
+            --validation-simulations 20000 \
+            --max-probe-points 20 \
+            --validate-top 4 \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trap-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: scan
+    if: always() && needs.scan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: trap-*
+          path: results
+      - name: Build trap-search report
+        run: |
+          python - <<'PY'
+          import glob, json, os
+          rows=[]
+          docs=[]
+          for path in glob.glob("results/**/result.json", recursive=True):
+              with open(path, encoding="utf-8") as f:
+                  d=json.load(f)
+              rows.append(d)
+          rows.sort(key=lambda d:(d["mode"], d["opening"]))
+          md=["# Tactical trap search", "",
+              "Reflection-canonical PUCT V3A. Baseline 20k sims/decision; broad counterfactual probe 2k; top candidates revalidated at 20k.", ""]
+          total_validated=0
+          for d in rows:
+              b=d["baseline"]
+              md += [f'## {d["mode"]} — {d["opening"]}', "",
+                     f'- Baseline opener value: **{b["openerValue"]}**, margin **{b["openerMargin"]}**, moves **{b["boardMoves"]}**',
+                     f'- Probe points: **{len(b["selectedProbePoints"])}** / opener decision points **{b["openerDecisionPoints"]}**',
+                     f'- Alternate candidates scanned: **{d["scan"]["candidateCount"]}**',
+                     f'- Probe reversals loss→draw/win: **{d["scan"]["probeReversals"]}**',
+                     f'- Validated reversals at 20k: **{len(d["validatedReversals"])}**', ""]
+              total_validated += len(d["validatedReversals"])
+              if d["validations"]:
+                  md += ["| ply | normal | forced low-rank | rank | root mean normal/alt | probe | 20k validation | continuation bait |",
+                         "|---:|---|---|---:|---|---|---|---|"]
+                  for v in d["validations"]:
+                      p=v["probe"]; x=v["validation"]; r=v["rootAssessment"]
+                      bait=" > ".join(x["trace"][:4])
+                      md.append(f'| {v["boardMove"]} | {v["chosenAction"]} | {v["alternateAction"]} | {v["alternateRank"]} | {r["chosenMean"]:.3f}/{r["alternateMean"]:.3f} | {p["openerValue"]} ({p["openerMargin"]}) | {x["openerValue"]} ({x["openerMargin"]}) | {bait} |')
+                  md.append("")
+          md += ["## Global result", "", f'- Total validated loss→draw/win reversals: **{total_validated}**', ""]
+          with open("tactical-trap-summary.md","w",encoding="utf-8") as f: f.write("\n".join(md)+"\n")
+          with open("tactical-trap-summary.json","w",encoding="utf-8") as f: json.dump(rows,f,indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tactical-trap-summary
+          path: |
+            tactical-trap-summary.md
+            tactical-trap-summary.json
+          retention-days: 7
