@@ -22,6 +22,9 @@ const probeSimulations = intArg("--probe-simulations", 1_000);
 const validationSimulations = intArg("--validation-simulations", 5_000);
 const maxBoardMoves = intArg("--max-board-moves", 160);
 const rescueUntilBoardMove = intArg("--rescue-until-board-move", 12);
+const rescueDepth = intArg("--rescue-depth", 2);
+const candidateLimit = intArg("--candidate-limit", 10);
+const validateTop = intArg("--validate-top", 2);
 const outPath = stringArg("--out");
 
 const responderAgent: ResearchAgentId = openerAgent === "A" ? "B" : "A";
@@ -50,9 +53,10 @@ while (state.game.status === "playing" && state.game.moveNumber < maxBoardMoves)
       forecastSimulations,
       probeSimulations,
       validationSimulations,
-      candidateLimit: 10,
-      validateTop: 4,
+      candidateLimit,
+      validateTop,
       rescueUntilBoardMove,
+      rescueDepth,
       maxBoardMoves,
       puctExploration: 1.5,
       policyTemperature: 0.6,
@@ -104,6 +108,9 @@ const result = {
     probeSimulations,
     validationSimulations,
     rescueUntilBoardMove,
+    rescueDepth,
+    candidateLimit,
+    validateTop,
     maxBoardMoves,
   },
   outcome: {
