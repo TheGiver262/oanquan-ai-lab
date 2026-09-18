@@ -44,6 +44,13 @@ export type ModeAwarePuctV3ALeafAuditBucket = {
 
 export type ModeAwarePuctV3ARootLeafAudit = {
   action: BalanceAction;
+  replies: Array<{
+    action: BalanceAction;
+    visits: number;
+    meanValue: number;
+    prior: number;
+    solvedOutcome: -1 | 0 | 1 | null;
+  }>;
   total: ModeAwarePuctV3ALeafAuditBucket;
   cycle: ModeAwarePuctV3ALeafAuditBucket;
   terminal: ModeAwarePuctV3ALeafAuditBucket;
@@ -307,7 +314,8 @@ export class ModeAwarePuctV3A {
         ? {
             rootLeafAudit: rankedChildren.map((child) =>
               serializeRootLeafAudit(
-                toCaller(child.action as BalanceAction),
+                child,
+                toCaller,
                 rootLeafAudit.get(child) ?? makeMutableRootLeafAudit(),
               ),
             ),
@@ -489,11 +497,22 @@ function serializeLeafBucket(bucket: MutableLeafBucket): ModeAwarePuctV3ALeafAud
 }
 
 function serializeRootLeafAudit(
-  action: BalanceAction,
+  child: Node,
+  toCaller: (action: BalanceAction) => BalanceAction,
   audit: MutableRootLeafAudit,
 ): ModeAwarePuctV3ARootLeafAudit {
+  const replies = [...child.children]
+    .sort((left, right) => right.visits - left.visits)
+    .map((reply) => ({
+      action: toCaller(reply.action as BalanceAction),
+      visits: reply.visits,
+      meanValue: reply.visits > 0 ? reply.valueSum / reply.visits : 0,
+      prior: reply.prior,
+      solvedOutcome: reply.solvedOutcome,
+    }));
   return {
-    action,
+    action: toCaller(child.action as BalanceAction),
+    replies,
     total: serializeLeafBucket(audit.total),
     cycle: serializeLeafBucket(audit.cycle),
     terminal: serializeLeafBucket(audit.terminal),
