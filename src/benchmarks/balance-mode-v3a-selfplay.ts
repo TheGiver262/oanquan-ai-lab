@@ -27,6 +27,8 @@ const timeBudgetMs = intArg("--time-budget-ms", 1_200);
 const simulationCap = intArg("--simulation-cap", 5_000_000);
 const fixedSimulations = optionalPositiveIntArg("--fixed-simulations");
 const maxBoardMoves = intArg("--max-board-moves", 160);
+const puctExploration = floatArg("--puct-exploration", 1.5);
+const policyTemperature = floatArg("--policy-temperature", 0.6);
 const outPath = stringArg("--out");
 
 let state = createBalanceInitialState(mode, openerAgent);
@@ -126,8 +128,8 @@ const result = {
     timeBudgetMs: fixedSimulations === null ? timeBudgetMs : null,
     simulationCap: fixedSimulations === null ? simulationCap : fixedSimulations,
     maxBoardMoves,
-    puctExploration: 1.5,
-    policyTemperature: 0.6,
+    puctExploration,
+    policyTemperature,
     rootNoise: false,
     reflectionCanonicalization: true,
   },
@@ -174,12 +176,12 @@ function chooseForCurrent(target: BalanceState): ModeAwarePuctV3ADecision {
   const decision = engines[agent].chooseAction(target, fixedSimulations === null ? {
     simulations: simulationCap,
     timeBudgetMs,
-    puctExploration: 1.5,
-    policyTemperature: 0.6,
+    puctExploration,
+    policyTemperature,
   } : {
     simulations: fixedSimulations,
-    puctExploration: 1.5,
-    policyTemperature: 0.6,
+    puctExploration,
+    policyTemperature,
   });
   recordSearch(search[agent], decision);
   protocolDecisions += 1;
@@ -305,4 +307,12 @@ function optionalPositiveIntArg(name: string): number | null {
 
 function intArg(name: string, fallback: number): number {
   return optionalPositiveIntArg(name) ?? fallback;
+}
+
+function floatArg(name: string, fallback: number): number {
+  const raw = stringArg(name);
+  if (raw === null) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
+  return value;
 }
