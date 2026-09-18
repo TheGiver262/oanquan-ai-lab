@@ -214,11 +214,11 @@ function bestCounterFrom(state: BalanceState, simulations: number): CounterResul
 }
 
 function validateCandidate(candidate: FirstMoveCandidate) {
-  const firstAction = getBalanceActions(anchor.state).find(
+  const firstAction = getBalanceActions(anchor!.state).find(
     (action) => action.kind === "move" && balanceActionKey(action) === candidate.firstAction,
   );
   if (!firstAction) throw new Error(`Missing validation first action ${candidate.firstAction}`);
-  const afterFirst = applyBalanceAction(anchor.state, firstAction);
+  const afterFirst = applyBalanceAction(anchor!.state, firstAction);
   if (!afterFirst.ok) throw new Error(afterFirst.error);
 
   if (afterFirst.state.game.status !== "playing") {
