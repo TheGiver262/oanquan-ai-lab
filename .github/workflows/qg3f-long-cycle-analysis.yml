@@ -1,0 +1,63 @@
+name: qg3f-long-cycle-analysis
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - "src/benchmarks/qg3f-long-cycle-analysis.ts"
+      - ".github/workflows/qg3f-long-cycle-analysis.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/research/balance-modes.ts"
+      - "src/engine.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  analyze:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: cw-A
+            opening: B3:CW
+            force_action: B3:CCW
+            opener: A
+          - id: ccw-A
+            opening: B3:CCW
+            force_action: B3:CW
+            opener: A
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Analyze exact and board-state cycles
+        run: |
+          npx tsx src/benchmarks/qg3f-long-cycle-analysis.ts \
+            --opening "${{ matrix.opening }}" \
+            --force-board-move 4 \
+            --force-action "${{ matrix.force_action }}" \
+            --opener-agent "${{ matrix.opener }}" \
+            --fixed-simulations 20000 \
+            --max-board-moves 600 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cycle-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
