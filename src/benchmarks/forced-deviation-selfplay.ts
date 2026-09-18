@@ -35,6 +35,7 @@ state = opened.state;
 const engines = { A: new ModeAwarePuctV3A(), B: new ModeAwarePuctV3A() };
 const trace: string[] = [balanceActionKey(openingAction)];
 let forced = false;
+let finishReason: string | null = null;
 let forceLegal: boolean | null = null;
 let forceDiagnostics: null | {
   currentAgent: ResearchAgentId;
@@ -82,6 +83,9 @@ while (state.game.status === "playing" && state.game.moveNumber < maxBoardMoves)
   if (trace.length < 32) trace.push(balanceActionKey(action));
   const applied = applyBalanceAction(state, action);
   if (!applied.ok) throw new Error(`Illegal action ${balanceActionKey(action)}: ${applied.error}`);
+  for (const event of applied.events) {
+    if (event.type === "match_finished") finishReason = event.reason;
+  }
   state = applied.state;
 }
 
@@ -112,6 +116,7 @@ const result = {
   },
   outcome: {
     unresolved,
+    finishReason,
     winnerAgent: winner,
     openerValue,
     openerMargin,
