@@ -42,7 +42,8 @@ const STAGE3_IDS = new Set([
 
 const stage = readStage("--stage");
 const fixedSimulations = intArg("--fixed-simulations", 10_000);
-const candidateLeafScoreWeight = numberArg("--candidate-leaf-score-weight", 0);
+const candidateLeafScoreWeight = numberArg("--candidate-leaf-score-weight", 1.8);
+const candidateLeafScoreMaterialMax = numberArg("--candidate-leaf-score-material-max", Number.POSITIVE_INFINITY);
 const outPath = stringArg("--out");
 const positions = buildPositions(stage);
 
@@ -86,7 +87,7 @@ const result = {
   methodology: {
     stage,
     incumbent: "ReusableScoreBoundedPuct leafScoreWeight=1.8",
-    candidate: `ReusableScoreBoundedPuct leafScoreWeight=${candidateLeafScoreWeight}`,
+    candidate: `ReusableScoreBoundedPuct leafScoreWeight=${candidateLeafScoreWeight}, leafScoreMaterialMax=${candidateLeafScoreMaterialMax}`,
     fixedSimulationsPerDecision: fixedSimulations,
     puctExploration: 1.5,
     policyTemperature: 0.6,
@@ -135,6 +136,9 @@ function play(position: Position, candidateSeat: PlayerId): GameResult {
       puctExploration: 1.5,
       policyTemperature: 0.6,
       leafScoreWeight: isCandidate ? candidateLeafScoreWeight : 1.8,
+      leafScoreMaterialMax: isCandidate
+        ? candidateLeafScoreMaterialMax
+        : Number.POSITIVE_INFINITY,
     });
     const move = decision.move;
     if (!move) return unresolvedResult(position, candidateSeat, state, startMove);
