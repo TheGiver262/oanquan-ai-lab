@@ -21,7 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm install
       - run: npm run typecheck
       - run: npm test
@@ -60,7 +59,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - run: npm install
       - name: Scan low-rated deviations and validate top reversals
         run: |
@@ -93,13 +91,11 @@ jobs:
       - name: Build trap-search report
         run: |
           python - <<'PY'
-          import glob, json, os
+          import glob, json
           rows=[]
-          docs=[]
           for path in glob.glob("results/**/result.json", recursive=True):
               with open(path, encoding="utf-8") as f:
-                  d=json.load(f)
-              rows.append(d)
+                  rows.append(json.load(f))
           rows.sort(key=lambda d:(d["mode"], d["opening"]))
           md=["# Tactical trap search", "",
               "Reflection-canonical PUCT V3A. Baseline 20k sims/decision; broad counterfactual probe 2k; top candidates revalidated at 20k.", ""]
