@@ -208,14 +208,15 @@ function readCase(name: string, fallback: CaseId): CaseId {
 
 function readBootstrap(
   name: string,
-  fallback: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only",
-): "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" {
+  fallback: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only",
+): "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only" {
   const value = stringArg(name) ?? fallback;
   if (
     value === "static"
     || value === "one_ply"
     || value === "unstable_one_ply"
     || value === "unstable_refutation_only"
+    || value === "unstable_opponent_refutation_only"
   ) return value;
-  throw new Error(`${name} must be static, one_ply, unstable_one_ply, or unstable_refutation_only`);
+  throw new Error(`${name} must be static, one_ply, unstable_one_ply, unstable_refutation_only, or unstable_opponent_refutation_only`);
 }
