@@ -1,0 +1,132 @@
+name: v3a1-leaf-score-causal
+
+on:
+  push:
+    branches:
+      - research/puct-v3a1-leaf-score
+    paths:
+      - ".github/workflows/v3a1-leaf-score-causal.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "tests/mode-aware-puct-v3a.test.ts"
+      - "src/benchmarks/v3a1-leaf-score-root-ablation.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  causal:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: move2-control
+            case_id: move2
+            budget: 99066
+            leaf_score_weight: 1.8
+          - id: move2-zero
+            case_id: move2
+            budget: 99066
+            leaf_score_weight: 0
+          - id: move2-v3a1
+            case_id: move2
+            budget: 99066
+            leaf_score_weight: 1.0
+          - id: move34-control
+            case_id: move34
+            budget: 90000
+            leaf_score_weight: 1.8
+          - id: move34-zero
+            case_id: move34
+            budget: 90000
+            leaf_score_weight: 0
+          - id: move34-v3a1
+            case_id: move34
+            budget: 90000
+            leaf_score_weight: 1.0
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run isolated leaf score ablation
+        run: |
+          npx tsx src/benchmarks/v3a1-leaf-score-root-ablation.ts \
+            --case "${{ matrix.case_id }}" \
+            --fixed-simulations "${{ matrix.budget }}" \
+            --leaf-score-weight "${{ matrix.leaf_score_weight }}" \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3a1-causal-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: causal
+    if: always() && needs.causal.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: v3a1-causal-*
+          path: results
+      - name: Build causal summary
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for path in glob.glob("results/**/result.json",recursive=True):
+              with open(path,encoding="utf-8") as f:
+                  rows.append(json.load(f))
+          rows.sort(key=lambda r:(r["methodology"]["caseId"],r["methodology"]["leafScoreWeight"]))
+          md=[
+            "# V3A.1 leaf-score causal ablation",
+            "",
+            "Only the leaf-value scoreDelta coefficient changes. Policy priors remain frozen at V3A's 1.8 coefficient.",
+            "",
+            "| case | leaf score weight | selected | focus A rank/visits/mean | focus B rank/visits/mean | heuristic A %/mean | heuristic B %/mean |",
+            "|---|---:|---|---|---|---|---|",
+          ]
+          serial=[]
+          for r in rows:
+              a,b=r["focus"]
+              def fmt(x):
+                  s=x["stats"]
+                  return "-" if not s else f'{s["rank"]}/{s["visits"]}/{s["meanValue"]:.6f}'
+              def hfmt(x):
+                  a=x["audit"]
+                  if not a or not a["total"]["count"]: return "-"
+                  frac=100*a["heuristic"]["count"]/a["total"]["count"]
+                  return f'{frac:.2f}%/{a["heuristic"]["meanReward"]:.6f}'
+              md.append(
+                f'| {r["methodology"]["caseId"]} | {r["methodology"]["leafScoreWeight"]} | {r["selectedAction"]} | '
+                f'{a["action"]} {fmt(a)} | {b["action"]} {fmt(b)} | {hfmt(a)} | {hfmt(b)} |'
+              )
+              serial.append(r)
+          open("v3a1-leaf-score-causal-summary.md","w",encoding="utf-8").write("\n".join(md)+"\n")
+          json.dump(serial,open("v3a1-leaf-score-causal-summary.json","w",encoding="utf-8"),indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3a1-leaf-score-causal-summary
+          path: |
+            v3a1-leaf-score-causal-summary.md
+            v3a1-leaf-score-causal-summary.json
+          retention-days: 7
