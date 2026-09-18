@@ -1,0 +1,64 @@
+name: qg-positional-cycle-validation
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/qg-positional-cycle-validation.yml"
+      - "src/benchmarks/forced-deviation-selfplay.ts"
+      - "src/research/balance-modes.ts"
+      - "src/research/mode-aware-puct-v3a.ts"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: cw-A
+            opening: B3:CW
+            force_action: B3:CCW
+            opener: A
+          - id: cw-B
+            opening: B3:CW
+            force_action: B3:CCW
+            opener: B
+          - id: ccw-A
+            opening: B3:CCW
+            force_action: B3:CW
+            opener: A
+          - id: ccw-B
+            opening: B3:CCW
+            force_action: B3:CW
+            opener: B
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - name: Validate known basin under positional threefold
+        run: |
+          npx tsx src/benchmarks/forced-deviation-selfplay.ts \
+            --mode quan-gia-positional-threefold \
+            --opening "${{ matrix.opening }}" \
+            --force-board-move 4 \
+            --force-action "${{ matrix.force_action }}" \
+            --opener-agent "${{ matrix.opener }}" \
+            --fixed-simulations 20000 \
+            --max-board-moves 160 \
+            --out result.json
+          python - <<'PY'
+          import json
+          d=json.load(open("result.json"))
+          assert d["outcome"]["finishReason"]=="repeated_position", d["outcome"]
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qgposcycle-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
