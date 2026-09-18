@@ -10,6 +10,14 @@ This file defines the research surface that should be treated as current on
 Goal: determine whether PUCT can discover the validated B3 defensive resources
 without forcing known moves.
 
+Canonical fair-validation verdict:
+- `docs/research/B3_FAIR_RESOURCE_VALIDATION_2026-09-18.md`
+- `src/benchmarks/b3-fair-move-quality-validation.ts`
+- `.github/workflows/b3-fair-move-quality-validation.yml`
+
+The earlier ResourceAware +48 discovery run is discovery evidence only, not a
+compute-fair strength comparison.
+
 Canonical code:
 
 - `src/research/mode-aware-puct-v3a.ts` — frozen reflection-canonical V3A adapter.
