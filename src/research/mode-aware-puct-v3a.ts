@@ -19,6 +19,39 @@ export type ModeAwarePuctV3AOptions = {
   timeBudgetMs?: number;
   puctExploration?: number;
   policyTemperature?: number;
+  /**
+   * Diagnostics-only. Records how leaf rewards contributing to each root child
+   * were produced. This must not alter selection, expansion, backup or ranking.
+   */
+  auditRootLeaves?: boolean;
+};
+
+export type ModeAwarePuctV3ALeafSource =
+  | "cycle"
+  | "terminal"
+  | "solved_nonterminal"
+  | "heuristic";
+
+export type ModeAwarePuctV3ALeafAuditBucket = {
+  count: number;
+  rewardSum: number;
+  meanReward: number;
+  minReward: number | null;
+  maxReward: number | null;
+  depthSum: number;
+  meanDepth: number;
+};
+
+export type ModeAwarePuctV3ARootLeafAudit = {
+  action: BalanceAction;
+  total: ModeAwarePuctV3ALeafAuditBucket;
+  cycle: ModeAwarePuctV3ALeafAuditBucket;
+  terminal: ModeAwarePuctV3ALeafAuditBucket;
+  solvedNonterminal: ModeAwarePuctV3ALeafAuditBucket;
+  heuristic: ModeAwarePuctV3ALeafAuditBucket;
+  terminalWins: number;
+  terminalDraws: number;
+  terminalLosses: number;
 };
 
 export type ModeAwarePuctV3ADiagnostics = {
@@ -45,6 +78,7 @@ export type ModeAwarePuctV3ADecision = {
   action: BalanceAction | null;
   diagnostics: ModeAwarePuctV3ADiagnostics;
   rootStats: ModeAwarePuctV3AActionStat[];
+  rootLeafAudit?: ModeAwarePuctV3ARootLeafAudit[];
 };
 
 type SolvedOutcome = -1 | 0 | 1 | null;
@@ -59,6 +93,25 @@ type Node = {
   prior: number;
   expanded: boolean;
   solvedOutcome: SolvedOutcome;
+};
+
+type MutableLeafBucket = {
+  count: number;
+  rewardSum: number;
+  minReward: number;
+  maxReward: number;
+  depthSum: number;
+};
+
+type MutableRootLeafAudit = {
+  total: MutableLeafBucket;
+  cycle: MutableLeafBucket;
+  terminal: MutableLeafBucket;
+  solvedNonterminal: MutableLeafBucket;
+  heuristic: MutableLeafBucket;
+  terminalWins: number;
+  terminalDraws: number;
+  terminalLosses: number;
 };
 
 const DEFAULT_SIMULATIONS = 100_000;
@@ -145,6 +198,9 @@ export class ModeAwarePuctV3A {
     let expandedNodes = 0;
     let maxTreeDepth = 0;
     let cycleCutoffs = 0;
+    const rootLeafAudit = options.auditRootLeaves
+      ? new Map<Node, MutableRootLeafAudit>()
+      : null;
 
     while (
       simulations < maxSimulations
@@ -184,6 +240,26 @@ export class ModeAwarePuctV3A {
       }
 
       const reward = node.solvedOutcome ?? normalizedAgentHeuristic(node.state, this.engineAgent);
+      if (rootLeafAudit && path.length > 1) {
+        const rootChild = path[1];
+        if (rootChild) {
+          const source: ModeAwarePuctV3ALeafSource = cycleLeaf
+            ? "cycle"
+            : node.state.game.status === "finished"
+              ? "terminal"
+              : node.solvedOutcome !== null
+                ? "solved_nonterminal"
+                : "heuristic";
+          recordRootLeafAudit(
+            rootLeafAudit,
+            rootChild,
+            source,
+            reward,
+            path.length - 1,
+            node.state.game.status === "finished" ? node.solvedOutcome : null,
+          );
+        }
+      }
       for (const cursor of path) {
         cursor.visits += 1;
         cursor.valueSum += reward;
@@ -227,6 +303,16 @@ export class ModeAwarePuctV3A {
         prior: child.prior,
         solvedOutcome: child.solvedOutcome,
       })),
+      ...(rootLeafAudit
+        ? {
+            rootLeafAudit: rankedChildren.map((child) =>
+              serializeRootLeafAudit(
+                toCaller(child.action as BalanceAction),
+                rootLeafAudit.get(child) ?? makeMutableRootLeafAudit(),
+              ),
+            ),
+          }
+        : {}),
     };
   }
 
@@ -331,6 +417,92 @@ export class ModeAwarePuctV3A {
       return right.prior - left.prior;
     });
   }
+}
+
+function makeMutableLeafBucket(): MutableLeafBucket {
+  return {
+    count: 0,
+    rewardSum: 0,
+    minReward: Number.POSITIVE_INFINITY,
+    maxReward: Number.NEGATIVE_INFINITY,
+    depthSum: 0,
+  };
+}
+
+function makeMutableRootLeafAudit(): MutableRootLeafAudit {
+  return {
+    total: makeMutableLeafBucket(),
+    cycle: makeMutableLeafBucket(),
+    terminal: makeMutableLeafBucket(),
+    solvedNonterminal: makeMutableLeafBucket(),
+    heuristic: makeMutableLeafBucket(),
+    terminalWins: 0,
+    terminalDraws: 0,
+    terminalLosses: 0,
+  };
+}
+
+function addLeafSample(bucket: MutableLeafBucket, reward: number, depth: number): void {
+  bucket.count += 1;
+  bucket.rewardSum += reward;
+  bucket.depthSum += depth;
+  bucket.minReward = Math.min(bucket.minReward, reward);
+  bucket.maxReward = Math.max(bucket.maxReward, reward);
+}
+
+function recordRootLeafAudit(
+  audits: Map<Node, MutableRootLeafAudit>,
+  child: Node,
+  source: ModeAwarePuctV3ALeafSource,
+  reward: number,
+  depth: number,
+  terminalOutcomeValue: SolvedOutcome,
+): void {
+  let audit = audits.get(child);
+  if (!audit) {
+    audit = makeMutableRootLeafAudit();
+    audits.set(child, audit);
+  }
+  addLeafSample(audit.total, reward, depth);
+  if (source === "cycle") addLeafSample(audit.cycle, reward, depth);
+  else if (source === "terminal") addLeafSample(audit.terminal, reward, depth);
+  else if (source === "solved_nonterminal") addLeafSample(audit.solvedNonterminal, reward, depth);
+  else addLeafSample(audit.heuristic, reward, depth);
+
+  if (source === "terminal") {
+    if (terminalOutcomeValue === 1) audit.terminalWins += 1;
+    else if (terminalOutcomeValue === 0) audit.terminalDraws += 1;
+    else if (terminalOutcomeValue === -1) audit.terminalLosses += 1;
+  }
+}
+
+function serializeLeafBucket(bucket: MutableLeafBucket): ModeAwarePuctV3ALeafAuditBucket {
+  return {
+    count: bucket.count,
+    rewardSum: bucket.rewardSum,
+    meanReward: bucket.count > 0 ? bucket.rewardSum / bucket.count : 0,
+    minReward: bucket.count > 0 ? bucket.minReward : null,
+    maxReward: bucket.count > 0 ? bucket.maxReward : null,
+    depthSum: bucket.depthSum,
+    meanDepth: bucket.count > 0 ? bucket.depthSum / bucket.count : 0,
+  };
+}
+
+function serializeRootLeafAudit(
+  action: BalanceAction,
+  audit: MutableRootLeafAudit,
+): ModeAwarePuctV3ARootLeafAudit {
+  return {
+    action,
+    total: serializeLeafBucket(audit.total),
+    cycle: serializeLeafBucket(audit.cycle),
+    terminal: serializeLeafBucket(audit.terminal),
+    solvedNonterminal: serializeLeafBucket(audit.solvedNonterminal),
+    heuristic: serializeLeafBucket(audit.heuristic),
+    terminalWins: audit.terminalWins,
+    terminalDraws: audit.terminalDraws,
+    terminalLosses: audit.terminalLosses,
+  };
 }
 
 export function reflectBalanceAction(action: BalanceAction): BalanceAction {
