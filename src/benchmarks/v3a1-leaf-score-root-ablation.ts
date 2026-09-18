@@ -17,6 +17,7 @@ const fixedSimulations = intArg(
   caseId === "move2" ? 99_066 : 90_000,
 );
 const leafScoreWeight = numberArg("--leaf-score-weight", 1.8);
+const leafBootstrap = readBootstrap("--leaf-bootstrap", "static");
 const outPath = stringArg("--out");
 
 const definition = buildCase(caseId);
@@ -25,6 +26,7 @@ const decision = new ModeAwarePuctV3A().chooseAction(definition.state, {
   puctExploration: 1.5,
   policyTemperature: 0.6,
   leafScoreWeight,
+  leafBootstrap,
   auditRootLeaves: true,
 });
 if (!decision.action || !decision.rootLeafAudit) {
@@ -53,6 +55,7 @@ const result = {
     caseId,
     fixedSimulations,
     leafScoreWeight,
+    leafBootstrap,
     puctExploration: 1.5,
     policyTemperature: 0.6,
     policyPriorScoreWeight: 1.8,
@@ -194,4 +197,14 @@ function readCase(name: string, fallback: CaseId): CaseId {
   const value = stringArg(name) ?? fallback;
   if (value === "move2" || value === "move34") return value;
   throw new Error(`${name} must be move2 or move34`);
+}
+
+
+function readBootstrap(
+  name: string,
+  fallback: "static" | "one_ply",
+): "static" | "one_ply" {
+  const value = stringArg(name) ?? fallback;
+  if (value === "static" || value === "one_ply") return value;
+  throw new Error(`${name} must be static or one_ply`);
 }
