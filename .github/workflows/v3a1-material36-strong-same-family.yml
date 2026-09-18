@@ -68,14 +68,14 @@ jobs:
           rows=[]
           for p in glob.glob("results/**/result.json",recursive=True):
               with open(p,encoding="utf-8") as f: rows.append(json.load(f))
-          rows.sort(key=lambda r:(r["methodology"]["fixedSimulations"],r["methodology"]["stage"]))
+          rows.sort(key=lambda r:(r["methodology"]["fixedSimulationsPerDecision"],r["methodology"]["stage"]))
           md=["# V3A.1 material36 strong same-family gate","",
               "Candidate leafScoreMaterialMax=36 vs incumbent V3A (Infinity), equal fixed simulations per decision.","",
               "| sims | stage | games | cand W | inc W | draws | unresolved | pairs +/=/- | mean pair diff |",
               "|---:|---|---:|---:|---:|---:|---:|---|---:|"]
           grouped={}
           for r in rows:
-              b=r["methodology"]["fixedSimulations"]
+              b=r["methodology"]["fixedSimulationsPerDecision"]
               grouped.setdefault(b,{"cw":0,"iw":0,"d":0,"u":0,"pairs":[]})
               g=grouped[b]
               g["cw"]+=r["candidateWins"]; g["iw"]+=r["incumbentWins"]; g["d"]+=r["draws"]; g["u"]+=r["unresolved"]; g["pairs"]+=r["pairDiffs"]
