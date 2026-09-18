@@ -88,6 +88,33 @@ describe("mode-aware PUCT V3A", () => {
     expect(cwStats).toEqual(ccwStatsMirrored);
   });
 
+  it("canonicalizes mirrored positional-repetition history together with the board", () => {
+    const cw = createBalanceInitialState("quan-gia-positional-threefold");
+    const ccw = createBalanceInitialState("quan-gia-positional-threefold");
+    const cwOpening = getBalanceActions(cw).find((action) => balanceActionKey(action) === "B3:CW");
+    const ccwOpening = getBalanceActions(ccw).find((action) => balanceActionKey(action) === "B3:CCW");
+    expect(cwOpening).toBeDefined();
+    expect(ccwOpening).toBeDefined();
+    if (!cwOpening || !ccwOpening) return;
+
+    const afterCw = applyBalanceAction(cw, cwOpening);
+    const afterCcw = applyBalanceAction(ccw, ccwOpening);
+    expect(afterCw.ok).toBe(true);
+    expect(afterCcw.ok).toBe(true);
+    if (!afterCw.ok || !afterCcw.ok) return;
+
+    const canonicalCw = canonicalizeBalanceStateForSearch(afterCw.state);
+    const canonicalCcw = canonicalizeBalanceStateForSearch(afterCcw.state);
+    expect(canonicalCw.state).toEqual(canonicalCcw.state);
+
+    const cwDecision = new ModeAwarePuctV3A().chooseAction(afterCw.state, { simulations: 512 });
+    const ccwDecision = new ModeAwarePuctV3A().chooseAction(afterCcw.state, { simulations: 512 });
+    expect(cwDecision.action).not.toBeNull();
+    expect(ccwDecision.action).not.toBeNull();
+    if (!cwDecision.action || !ccwDecision.action) return;
+    expect(balanceActionKey(cwDecision.action)).toBe(balanceActionKey(reflectBalanceAction(ccwDecision.action)));
+  });
+
   it("sees SWAP as a first-class action in Pie search", () => {
     let state = createBalanceInitialState("pie-threefold");
     const opening = getBalanceActions(state).find((action) => action.kind === "move");
@@ -151,6 +178,7 @@ describe("mode-aware PUCT V3A", () => {
       "delayed-pie-6-threefold",
       "open-pie-threefold",
       "quan-gia",
+      "quan-gia-positional-threefold",
     ] as const;
 
     for (const mode of modes) {
