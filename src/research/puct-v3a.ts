@@ -17,6 +17,13 @@ export type PuctV3AOptions = {
    * (dan stones + quan stones) is <= this threshold. Policy priors stay frozen.
    */
   leafScoreMaterialMax?: number;
+  /**
+   * V4 research-only leaf bootstrap. "static" reproduces V3A/V3A.1.
+   * "unstable_one_ply" evaluates already-expanded children only at tactical
+   * leaves selected by leafQuiescenceScoreSwing.
+   */
+  leafBootstrap?: "static" | "unstable_one_ply";
+  leafQuiescenceScoreSwing?: number;
 };
 
 export type PuctV3ADiagnostics = {
@@ -63,6 +70,8 @@ const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
 const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
+const DEFAULT_LEAF_BOOTSTRAP: "static" | "unstable_one_ply" = "static";
+const DEFAULT_LEAF_QUIESCENCE_SCORE_SWING = 10;
 const REAL_MOVE_REUSE_PLIES = 2;
 
 /**
@@ -119,6 +128,9 @@ export class ReusableScoreBoundedPuct {
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
     const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
     const leafScoreMaterialMax = options.leafScoreMaterialMax ?? Number.POSITIVE_INFINITY;
+    const leafBootstrap = options.leafBootstrap ?? DEFAULT_LEAF_BOOTSTRAP;
+    const leafQuiescenceScoreSwing =
+      options.leafQuiescenceScoreSwing ?? DEFAULT_LEAF_QUIESCENCE_SCORE_SWING;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
     if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
@@ -126,6 +138,9 @@ export class ReusableScoreBoundedPuct {
     }
     if (!(leafScoreMaterialMax >= 0)) {
       throw new Error("leafScoreMaterialMax must be a non-negative number");
+    }
+    if (!Number.isFinite(leafQuiescenceScoreSwing) || leafQuiescenceScoreSwing < 0) {
+      throw new Error("leafQuiescenceScoreSwing must be a finite non-negative number");
     }
 
     let simulations = 0;
@@ -170,10 +185,21 @@ export class ReusableScoreBoundedPuct {
         if (created > 0) maxTreeDepth = Math.max(maxTreeDepth, path.length);
       }
 
-      const reward = node.solvedOutcome ?? normalizedHeuristic(
-        node.state,
-        this.enginePlayer,
-        effectiveLeafScoreWeight(node.state, leafScoreWeight, leafScoreMaterialMax),
+      const reward = node.solvedOutcome ?? (
+        cycleLeaf
+          ? normalizedHeuristic(
+              node.state,
+              this.enginePlayer,
+              effectiveLeafScoreWeight(node.state, leafScoreWeight, leafScoreMaterialMax),
+            )
+          : heuristicLeafReward(
+              node,
+              this.enginePlayer,
+              leafScoreWeight,
+              leafScoreMaterialMax,
+              leafBootstrap,
+              leafQuiescenceScoreSwing,
+            )
       );
       for (const cursor of path) {
         cursor.visits += 1;
@@ -453,6 +479,45 @@ function effectiveLeafScoreWeight(
 
 function rawBoardMaterial(state: GameState): number {
   return state.pits.reduce((sum, pit) => sum + pit.stones + pit.quanStones, 0);
+}
+
+function heuristicLeafReward(
+  node: Node,
+  enginePlayer: PlayerId,
+  scoreWeight: number,
+  scoreMaterialMax: number,
+  bootstrap: "static" | "unstable_one_ply",
+  quiescenceScoreSwing: number,
+): number {
+  const staticWeight = effectiveLeafScoreWeight(node.state, scoreWeight, scoreMaterialMax);
+  const staticValue = normalizedHeuristic(node.state, enginePlayer, staticWeight);
+  if (bootstrap === "static" || node.children.length === 0) return staticValue;
+  if (!isTacticallyUnstableLeaf(node, enginePlayer, quiescenceScoreSwing)) return staticValue;
+
+  const maximizing = node.state.currentPlayer === enginePlayer;
+  let best = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+  for (const child of node.children) {
+    const childWeight = effectiveLeafScoreWeight(child.state, scoreWeight, scoreMaterialMax);
+    const value = child.solvedOutcome
+      ?? normalizedHeuristic(child.state, enginePlayer, childWeight);
+    best = maximizing ? Math.max(best, value) : Math.min(best, value);
+  }
+  return Number.isFinite(best) ? best : staticValue;
+}
+
+function isTacticallyUnstableLeaf(
+  node: Node,
+  enginePlayer: PlayerId,
+  minScoreSwing: number,
+): boolean {
+  const opponent = otherPlayer(enginePlayer);
+  const baseScoreDelta = node.state.scores[enginePlayer] - node.state.scores[opponent];
+  for (const child of node.children) {
+    if (child.solvedOutcome !== null || child.state.status === "finished") return true;
+    const childScoreDelta = child.state.scores[enginePlayer] - child.state.scores[opponent];
+    if (Math.abs(childScoreDelta - baseScoreDelta) >= minScoreSwing) return true;
+  }
+  return false;
 }
 
 function normalizedHeuristic(
