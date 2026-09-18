@@ -34,16 +34,24 @@ export type SwapState = Readonly<{
   maxResponderNormalMovesBeforeExpiry: number | null;
 }>;
 
+export type PositionalHistoryNode = Readonly<{
+  key: string;
+  parent: PositionalHistoryNode | null;
+  depth: number;
+  hashA: number;
+  hashB: number;
+}>;
+
 export type BalanceState = Readonly<{
   mode: BalanceModeId;
   game: GameState;
   seatToAgent: SeatToAgent;
   swap: SwapState;
   /**
-   * Exact start-of-turn strategic positions seen so far. Populated only by
-   * positional-repetition research modes; omitted/empty elsewhere.
+   * Persistent exact start-of-turn strategic-position history. The linked
+   * representation keeps PUCT nodes O(1) in history-storage overhead.
    */
-  positionalHistory?: readonly string[];
+  positionalHistory?: PositionalHistoryNode | null;
 }>;
 
 export type BalanceAction =
@@ -80,7 +88,9 @@ export function createBalanceInitialState(
     game,
     seatToAgent,
     swap: initialSwapState(mode, responderAgent),
-    positionalHistory: modeUsesPositionalThreefold(mode) ? [positionalRepetitionKey(game)] : [],
+    positionalHistory: modeUsesPositionalThreefold(mode)
+      ? buildPositionalHistory([positionalRepetitionKey(game)])
+      : null,
   };
 }
 
@@ -168,15 +178,12 @@ export function applyBalanceAction(state: BalanceState, action: BalanceAction): 
 
   const nextGame = applied.state;
   const nextEvents = [...applied.events];
-  let positionalHistory = state.positionalHistory ?? [];
+  let positionalHistory = state.positionalHistory ?? null;
 
   if (modeUsesPositionalThreefold(state.mode) && nextGame.status === "playing") {
     const positionKey = positionalRepetitionKey(nextGame);
-    const priorOccurrences = positionalHistory.reduce(
-      (count, key) => count + (key === positionKey ? 1 : 0),
-      0,
-    );
-    positionalHistory = [...positionalHistory, positionKey];
+    const priorOccurrences = countPositionalOccurrences(positionalHistory, positionKey);
+    positionalHistory = appendPositionalHistory(positionalHistory, positionKey);
     if (priorOccurrences + 1 >= 3) {
       finishByPositionalRepetition(nextGame, nextEvents);
     }
@@ -218,7 +225,7 @@ export function cloneBalanceState(state: BalanceState): BalanceState {
     },
     seatToAgent: { ...state.seatToAgent },
     swap: { ...state.swap },
-    positionalHistory: state.positionalHistory ? [...state.positionalHistory] : [],
+    positionalHistory: state.positionalHistory ?? null,
   };
 }
 
@@ -272,6 +279,66 @@ function otherResearchAgent(agent: ResearchAgentId): ResearchAgentId {
   return agent === "A" ? "B" : "A";
 }
 
+
+const POSITION_HISTORY_HASH_A_SEED = 0x811c9dc5;
+const POSITION_HISTORY_HASH_B_SEED = 0x9e3779b9;
+
+export function appendPositionalHistory(
+  parent: PositionalHistoryNode | null,
+  key: string,
+): PositionalHistoryNode {
+  return {
+    key,
+    parent,
+    depth: (parent?.depth ?? 0) + 1,
+    hashA: hashHistoryAppend(parent?.hashA ?? POSITION_HISTORY_HASH_A_SEED, key, 0x01000193),
+    hashB: hashHistoryAppend(parent?.hashB ?? POSITION_HISTORY_HASH_B_SEED, key, 0x27d4eb2d),
+  };
+}
+
+export function buildPositionalHistory(keys: readonly string[]): PositionalHistoryNode | null {
+  let history: PositionalHistoryNode | null = null;
+  for (const key of keys) history = appendPositionalHistory(history, key);
+  return history;
+}
+
+export function positionalHistoryContextKey(history: PositionalHistoryNode | null | undefined): string {
+  if (!history) return "-";
+  return [
+    history.depth,
+    history.hashA.toString(16).padStart(8, "0"),
+    history.hashB.toString(16).padStart(8, "0"),
+  ].join(":");
+}
+
+export function reflectPositionalHistory(
+  history: PositionalHistoryNode | null | undefined,
+): PositionalHistoryNode | null {
+  if (!history) return null;
+  const keys: string[] = [];
+  for (let cursor: PositionalHistoryNode | null = history; cursor; cursor = cursor.parent) {
+    keys.push(reflectPositionalRepetitionKey(cursor.key));
+  }
+  keys.reverse();
+  return buildPositionalHistory(keys);
+}
+
+function countPositionalOccurrences(history: PositionalHistoryNode | null, key: string): number {
+  let count = 0;
+  for (let cursor = history; cursor; cursor = cursor.parent) {
+    if (cursor.key === key) count += 1;
+  }
+  return count;
+}
+
+function hashHistoryAppend(seed: number, key: string, prime: number): number {
+  let hash = seed ^ 0x7c;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, prime);
+  }
+  return hash >>> 0;
+}
 
 const POSITION_REFLECT_PIT: Readonly<Record<string, string>> = Object.freeze({
   L: "R",
