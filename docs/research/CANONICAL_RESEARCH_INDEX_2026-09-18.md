@@ -20,7 +20,8 @@ compute-fair strength comparison.
 
 Canonical code:
 
-- `src/research/mode-aware-puct-v3a.ts` — frozen reflection-canonical V3A adapter.
+- `src/research/mode-aware-puct-v3a.ts` — historical reflection-canonical V3A adapter used by the completed B3 evidence.
+- `src/research/mode-aware-puct-v3a1.ts` — canonical V3A.1 adapter for future balance/search work.
 - `src/research/resource-aware-puct-v3a.ts` — research-only rescue wrapper.
 - `src/benchmarks/b3-resource-aware-selfplay.ts` — asymmetric B3 validation.
 - `.github/workflows/b3-resource-aware-selfplay.yml`.
@@ -28,7 +29,7 @@ Canonical code:
 Rules:
 
 - do not hard-code B3 action names into the rescue algorithm;
-- do not modify the incumbent V3A search math during this track;
+- completed B3 rescue evidence must preserve its V3A historical baseline; new rescue/challenger work should use V3A.1 as incumbent unless explicitly reproducing a historical experiment;
 - candidate rescue must be validated against a strong fresh V3A continuation;
 - cross-play is required before calling a search variant stronger.
 
@@ -63,17 +64,29 @@ reflection-safe, but the 20-game rematch did not solve opening balance.
 
 ## Canonical AI-strength evidence
 
-Algorithm race is closed. PUCT V3A is the incumbent among validated tested
-algorithms; this does not mean game-theoretically unbeatable.
+PUCT V3A.1 material36 is the canonical research incumbent among validated
+tested algorithms; this does not mean game-theoretically unbeatable.
 
+Current incumbent:
+- `docs/research/V3A1_MATERIAL36_PROMOTION_VERDICT_2026-09-18.md`
+- `src/research/puct-v3a1.ts`
+- `src/research/mode-aware-puct-v3a1.ts`
+- `tests/puct-v3a1.test.ts`
+- `.github/workflows/v3a1-material36-promotion-screen.yml`
+- `.github/workflows/v3a1-material36-budget-robustness.yml`
+- `.github/workflows/v3a1-material36-strong-same-family.yml`
+- `.github/workflows/v3a1-material36-vs-trang-nguyen.yml`
+
+Historical V3A promotion evidence remains canonical for the previous incumbent:
 - `docs/research/R1_PROMOTION_VERDICT_2026-09-17.md`
 - `docs/research/R1D_A_EVIDENCE_2026-09-17.md`
 - `docs/research/AI_TRACK_CLOSED_BALANCE_TRACK_2026-09-17.md`
 - `src/research/puct-v3a.ts`
 - `src/benchmarks/r1d-production-semantics-v3a-vs-trang-nguyen.ts`
-- `.github/workflows/r1a-production-parity.yml`
-- `.github/workflows/r1d-production-semantics-tn-gate.yml`
-- `.github/workflows/r1d-production-semantics-tn-replicates.yml`
+
+Future algorithm challengers must compare against V3A.1. Historical B3 and R1
+evidence that was executed before this promotion remains evidence about V3A and
+must not be silently relabeled as V3A.1 evidence.
 
 PVS/NegaScout is historical only and excluded from future active evaluation
 unless explicitly reopened.
