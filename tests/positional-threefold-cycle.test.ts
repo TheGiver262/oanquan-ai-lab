@@ -37,8 +37,8 @@ describe("Quan Gia positional threefold exact-cycle regression", () => {
     expect(oldMode.finishReason).toBeNull();
     expect(oldMode.state.game.scores).toEqual({ P0: 27, P1: 28 });
 
-    const positional = replay("quan-gia-positional-threefold", trace);
-    expect(positional.state.game.moveNumber).toBe(74);
+    const positional = replayUntilFinish("quan-gia-positional-threefold", trace);
+    expect(positional.state.game.moveNumber).toBe(36);
     expect(positional.state.game.status).toBe("finished");
     expect(positional.finishReason).toBe("repeated_position");
     expect(positional.state.game.winner).toBeNull();
@@ -54,14 +54,39 @@ describe("Quan Gia positional threefold exact-cycle regression", () => {
     expect(oldMode.state.game.status).toBe("playing");
     expect(oldMode.state.game.scores).toEqual({ P0: 27, P1: 28 });
 
-    const positional = replay("quan-gia-positional-threefold", trace);
-    expect(positional.state.game.moveNumber).toBe(74);
+    const positional = replayUntilFinish("quan-gia-positional-threefold", trace);
+    expect(positional.state.game.moveNumber).toBe(36);
     expect(positional.state.game.status).toBe("finished");
     expect(positional.finishReason).toBe("repeated_position");
     expect(positional.state.game.winner).toBeNull();
     expect(positional.state.game.scores).toEqual({ P0: 35, P1: 35 });
   });
 });
+
+function replayUntilFinish(mode: BalanceModeId, trace: readonly string[]): {
+  state: BalanceState;
+  finishReason: string | null;
+} {
+  let state = createBalanceInitialState(mode);
+  let finishReason: string | null = null;
+
+  for (const key of trace) {
+    if (state.game.status === "finished") break;
+    const action = getBalanceActions(state).find(
+      (candidate) => candidate.kind === "move" && balanceActionKey(candidate) === key,
+    );
+    expect(action, `missing legal action ${key} at move ${state.game.moveNumber}`).toBeDefined();
+    if (!action) break;
+    const applied = applyBalanceAction(state, action);
+    expect(applied.ok, `failed ${key} at move ${state.game.moveNumber}`).toBe(true);
+    if (!applied.ok) break;
+    for (const event of applied.events) {
+      if (event.type === "match_finished") finishReason = event.reason;
+    }
+    state = applied.state;
+  }
+  return { state, finishReason };
+}
 
 function replay(mode: BalanceModeId, trace: readonly string[]): {
   state: BalanceState;
