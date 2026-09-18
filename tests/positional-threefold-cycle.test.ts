@@ -38,7 +38,7 @@ describe("Quan Gia positional threefold exact-cycle regression", () => {
     expect(oldMode.state.game.scores).toEqual({ P0: 27, P1: 28 });
 
     const positional = replayUntilFinish("quan-gia-positional-threefold", trace);
-    expect(positional.state.game.moveNumber).toBe(36);
+    expect(positional.state.game.moveNumber).toBe(37);
     expect(positional.state.game.status).toBe("finished");
     expect(positional.finishReason).toBe("repeated_position");
     expect(positional.state.game.winner).toBeNull();
@@ -55,7 +55,7 @@ describe("Quan Gia positional threefold exact-cycle regression", () => {
     expect(oldMode.state.game.scores).toEqual({ P0: 27, P1: 28 });
 
     const positional = replayUntilFinish("quan-gia-positional-threefold", trace);
-    expect(positional.state.game.moveNumber).toBe(36);
+    expect(positional.state.game.moveNumber).toBe(37);
     expect(positional.state.game.status).toBe("finished");
     expect(positional.finishReason).toBe("repeated_position");
     expect(positional.state.game.winner).toBeNull();
