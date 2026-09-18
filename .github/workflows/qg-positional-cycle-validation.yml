@@ -1,4 +1,5 @@
 name: qg-positional-cycle-validation
+# HEAD validation after memory-bounded positional-history fix.
 
 on:
   push:
