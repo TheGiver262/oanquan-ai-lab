@@ -46,15 +46,15 @@ jobs:
             --opening "${{ matrix.opening }}" \
             --opener-agent "${{ matrix.opener }}" \
             --baseline-simulations 10000 \
-            --primary-simulations 10000 \
-            --forecast-simulations 10000 \
-            --probe-simulations 2000 \
-            --validation-simulations 10000 \
-            --candidate-limit 10 \
+            --primary-simulations 5000 \
+            --forecast-simulations 5000 \
+            --probe-simulations 1000 \
+            --validation-simulations 5000 \
+            --candidate-limit 5 \
             --validate-top 2 \
             --rescue-depth 2 \
             --rescue-until-board-move 12 \
-            --max-board-moves 160 \
+            --max-board-moves 120 \
             --out result.json
       - uses: actions/upload-artifact@v4
         with:
