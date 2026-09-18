@@ -1,5 +1,11 @@
 # R1 V3A promotion verdict — 2026-09-17
 
+> Supersession note — 2026-09-18: this document remains the historical V3A
+> promotion record. V3A.1 material36 later superseded V3A as the canonical
+> research incumbent; see
+> `docs/research/V3A1_MATERIAL36_PROMOTION_VERDICT_2026-09-18.md`.
+> Historical R1 results below must not be relabeled as V3A.1 evidence.
+
 ## Verdict
 
 **PROMOTE — scoped R1 research promotion.**
