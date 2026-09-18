@@ -8,6 +8,7 @@ import {
 } from "../src/engine.js";
 import {
   applyBalanceAction,
+  buildPositionalHistory,
   createBalanceInitialState,
   currentAgent,
   getBalanceActions,
@@ -34,7 +35,7 @@ describe("balance mode semantics", () => {
     expect(quanGia.game.ruleset.repetitionPolicy ?? "none").toBe("none");
     expect(positional.game.ruleset.ruleProfileId).toBe("mature_quan_v1");
     expect(positional.game.ruleset.repetitionPolicy ?? "none").toBe("none");
-    expect(positional.positionalHistory).toHaveLength(1);
+    expect(positional.positionalHistory?.depth).toBe(1);
   });
 
   it("offers classic Pie only to original responder B at the first response", () => {
@@ -164,7 +165,7 @@ describe("balance mode semantics", () => {
 
     const primed = {
       ...initial,
-      positionalHistory: [repeatedKey, repeatedKey],
+      positionalHistory: buildPositionalHistory([repeatedKey, repeatedKey]),
     };
     const third = applyBalanceAction(primed, move);
     expect(third.ok).toBe(true);
