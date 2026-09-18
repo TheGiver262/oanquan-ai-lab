@@ -88,6 +88,36 @@ describe("mode-aware PUCT V3A", () => {
     expect(cwStats).toEqual(ccwStatsMirrored);
   });
 
+  it("root leaf auditing is observation-only and does not alter search output", () => {
+    const state = createBalanceInitialState("quan-gia-threefold");
+    const opening = getBalanceActions(state).find(
+      (action) => balanceActionKey(action) === "B3:CW",
+    );
+    expect(opening).toBeDefined();
+    if (!opening) return;
+    const afterOpening = applyBalanceAction(state, opening);
+    expect(afterOpening.ok).toBe(true);
+    if (!afterOpening.ok) return;
+
+    const plain = new ModeAwarePuctV3A().chooseAction(afterOpening.state, {
+      simulations: 2_048,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+    });
+    const audited = new ModeAwarePuctV3A().chooseAction(afterOpening.state, {
+      simulations: 2_048,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+      auditRootLeaves: true,
+    });
+
+    expect(audited.action).toEqual(plain.action);
+    expect(audited.rootStats).toEqual(plain.rootStats);
+    expect(audited.diagnostics).toEqual(plain.diagnostics);
+    expect(audited.rootLeafAudit).toBeDefined();
+    expect(audited.rootLeafAudit?.reduce((sum, entry) => sum + entry.total.count, 0)).toBeGreaterThan(0);
+  });
+
   it("canonicalizes mirrored positional-repetition history together with the board", () => {
     const cw = createBalanceInitialState("quan-gia-positional-threefold");
     const ccw = createBalanceInitialState("quan-gia-positional-threefold");
