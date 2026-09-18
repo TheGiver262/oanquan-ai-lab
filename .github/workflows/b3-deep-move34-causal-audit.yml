@@ -1,0 +1,92 @@
+name: b3-deep-move34-causal-audit
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/b3-deep-move34-causal-audit.yml"
+      - "src/benchmarks/b3-deep-move34-causal-audit.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  audit:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        budget: [80000, 90000]
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Audit deep move-34 transition
+        run: |
+          npx tsx src/benchmarks/b3-deep-move34-causal-audit.ts \
+            --fixed-simulations "${{ matrix.budget }}" \
+            --max-board-moves 240 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deep34-${{ matrix.budget }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: audit
+    if: always() && needs.audit.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: deep34-*
+          path: results
+      - name: Summarize
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          rows.sort(key=lambda r:r["methodology"]["fixedSimulations"])
+          def lab(o):
+              if o["unresolved"]:return "U"
+              if o["openerValue"]==1:return "OW"
+              if o["openerValue"]==0:return "D"
+              return "RW"
+          md=["# B3 deep move-34 causal audit","",
+              "| budget | selected | B2 rank/visits/mean | B5 rank/visits/mean | B2 outcome | B2 margin | B5 outcome | B5 margin |",
+              "|---:|---|---|---|---|---:|---|---:|"]
+          for r in rows:
+              a=r["root"]["actionA"]["stats"]; b=r["root"]["actionB"]["stats"]
+              oa=r["branches"]["actionA"]; ob=r["branches"]["actionB"]
+              md.append(f'| {r["methodology"]["fixedSimulations"]} | {r["root"]["selectedAction"]} | {a["rank"]}/{a["visits"]}/{a["meanValue"]:.4f} | {b["rank"]}/{b["visits"]}/{b["meanValue"]:.4f} | {lab(oa)} | {oa["openerMargin"]} | {lab(ob)} | {ob["openerMargin"]} |')
+          open("b3-deep-move34-summary.md","w",encoding="utf-8").write("\n".join(md)+"\n")
+          json.dump(rows,open("b3-deep-move34-summary.json","w",encoding="utf-8"),indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-deep-move34-summary
+          path: |
+            b3-deep-move34-summary.md
+            b3-deep-move34-summary.json
+          retention-days: 7
