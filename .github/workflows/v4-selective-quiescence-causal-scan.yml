@@ -1,0 +1,112 @@
+name: v4-selective-quiescence-causal-scan
+
+on:
+  push:
+    branches:
+      - research/puct-v4-quiescence
+    paths:
+      - ".github/workflows/v4-selective-quiescence-causal-scan.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/benchmarks/v3a1-leaf-score-root-ablation.ts"
+      - "tests/puct-v4-quiescence.test.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  scan:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: move2-static, case_id: move2, budget: 99066, mode: static, swing: 10 }
+          - { id: move34-static, case_id: move34, budget: 90000, mode: static, swing: 10 }
+          - { id: move2-q4, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 4 }
+          - { id: move34-q4, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 4 }
+          - { id: move2-q6, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 6 }
+          - { id: move34-q6, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 6 }
+          - { id: move2-q8, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 8 }
+          - { id: move34-q8, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 8 }
+          - { id: move2-q10, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 10 }
+          - { id: move34-q10, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 10 }
+          - { id: move2-q12, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 12 }
+          - { id: move34-q12, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 12 }
+          - { id: move2-q15, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 15 }
+          - { id: move34-q15, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 15 }
+          - { id: move2-q20, case_id: move2, budget: 99066, mode: unstable_one_ply, swing: 20 }
+          - { id: move34-q20, case_id: move34, budget: 90000, mode: unstable_one_ply, swing: 20 }
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run causal safety probe
+        run: |
+          npx tsx src/benchmarks/v3a1-leaf-score-root-ablation.ts \
+            --case "${{ matrix.case_id }}" \
+            --fixed-simulations "${{ matrix.budget }}" \
+            --leaf-score-weight 1.8 \
+            --leaf-score-material-max 36 \
+            --leaf-bootstrap "${{ matrix.mode }}" \
+            --leaf-quiescence-score-swing "${{ matrix.swing }}" \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v4-causal-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: scan
+    if: always() && needs.scan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: v4-causal-*
+          path: results
+      - name: Build V4 causal summary
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          rows.sort(key=lambda r:(r["methodology"]["caseId"],r["methodology"]["leafBootstrap"],r["methodology"]["leafQuiescenceScoreSwing"]))
+          md=["# V4 selective-quiescence causal safety scan","",
+              "All candidates build on V3A.1 material36. Static rows are controls.","",
+              "| case | mode | swing | selected | focus A rank/visits/mean | focus B rank/visits/mean |",
+              "|---|---|---:|---|---|---|"]
+          for r in rows:
+              a,b=r["focus"]
+              def fmt(x):
+                  s=x["stats"]
+                  return f'{s["rank"]}/{s["visits"]}/{s["meanValue"]:.6f}' if s else "-"
+              md.append(f'| {r["methodology"]["caseId"]} | {r["methodology"]["leafBootstrap"]} | {r["methodology"]["leafQuiescenceScoreSwing"]} | {r["selectedAction"]} | {a["action"]} {fmt(a)} | {b["action"]} {fmt(b)} |')
+          open("v4-selective-quiescence-causal-summary.md","w",encoding="utf-8").write("\n".join(md)+"\n")
+          json.dump(rows,open("v4-selective-quiescence-causal-summary.json","w",encoding="utf-8"),indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v4-selective-quiescence-causal-summary
+          path: |
+            v4-selective-quiescence-causal-summary.md
+            v4-selective-quiescence-causal-summary.json
+          retention-days: 7
