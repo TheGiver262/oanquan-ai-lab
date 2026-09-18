@@ -1,0 +1,109 @@
+name: v3a1-material-score-threshold
+
+on:
+  push:
+    branches:
+      - research/puct-v3a1-leaf-score
+    paths:
+      - ".github/workflows/v3a1-material-score-threshold.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/benchmarks/v3a1-leaf-score-root-ablation.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  scan:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: m2-16, case_id: move2, budget: 99066, material_max: 16 }
+          - { id: m2-20, case_id: move2, budget: 99066, material_max: 20 }
+          - { id: m2-24, case_id: move2, budget: 99066, material_max: 24 }
+          - { id: m2-28, case_id: move2, budget: 99066, material_max: 28 }
+          - { id: m2-32, case_id: move2, budget: 99066, material_max: 32 }
+          - { id: m2-36, case_id: move2, budget: 99066, material_max: 36 }
+          - { id: m2-40, case_id: move2, budget: 99066, material_max: 40 }
+          - { id: m34-16, case_id: move34, budget: 90000, material_max: 16 }
+          - { id: m34-20, case_id: move34, budget: 90000, material_max: 20 }
+          - { id: m34-24, case_id: move34, budget: 90000, material_max: 24 }
+          - { id: m34-28, case_id: move34, budget: 90000, material_max: 28 }
+          - { id: m34-32, case_id: move34, budget: 90000, material_max: 32 }
+          - { id: m34-36, case_id: move34, budget: 90000, material_max: 36 }
+          - { id: m34-40, case_id: move34, budget: 90000, material_max: 40 }
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Scan phase-aware score threshold
+        run: |
+          npx tsx src/benchmarks/v3a1-leaf-score-root-ablation.ts \
+            --case "${{ matrix.case_id }}" \
+            --fixed-simulations "${{ matrix.budget }}" \
+            --leaf-score-weight 1.8 \
+            --leaf-bootstrap static \
+            --leaf-score-material-max "${{ matrix.material_max }}" \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: material-score-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: scan
+    if: always() && needs.scan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: material-score-*
+          path: results
+      - name: Build threshold summary
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          rows.sort(key=lambda r:(r["methodology"]["caseId"],r["methodology"]["leafScoreMaterialMax"]))
+          md=["# V3A.1 material-gated score scan","",
+              "Score weight stays 1.8, but contributes only at heuristic leaves whose remaining raw board material is <= threshold.",
+              "",
+              "| case | material max | selected | focus A rank/visits/mean | focus B rank/visits/mean |",
+              "|---|---:|---|---|---|"]
+          for r in rows:
+              a,b=r["focus"]
+              def fmt(x):
+                  s=x["stats"]
+                  return f'{s["rank"]}/{s["visits"]}/{s["meanValue"]:.6f}' if s else "-"
+              md.append(f'| {r["methodology"]["caseId"]} | {r["methodology"]["leafScoreMaterialMax"]} | {r["selectedAction"]} | {a["action"]} {fmt(a)} | {b["action"]} {fmt(b)} |')
+          open("v3a1-material-score-summary.md","w",encoding="utf-8").write("\n".join(md)+"\n")
+          json.dump(rows,open("v3a1-material-score-summary.json","w",encoding="utf-8"),indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3a1-material-score-summary
+          path: |
+            v3a1-material-score-summary.md
+            v3a1-material-score-summary.json
+          retention-days: 7
