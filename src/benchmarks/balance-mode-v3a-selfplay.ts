@@ -277,6 +277,7 @@ function readMode(name: string): BalanceModeId {
     "open-pie-threefold",
     "quan-gia",
     "quan-gia-threefold",
+    "quan-gia-positional-threefold",
     "quan-gia-pie-threefold",
   ];
   if (allowed.includes(value as BalanceModeId)) return value as BalanceModeId;
