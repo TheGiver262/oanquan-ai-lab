@@ -91,6 +91,21 @@ must not be silently relabeled as V3A.1 evidence.
 PVS/NegaScout is historical only and excluded from future active evaluation
 unless explicitly reopened.
 
+## Closed V4 selective-quiescence track
+
+The selective one-ply quiescence family is closed and rejected:
+
+- `docs/research/V4_SELECTIVE_QUIESCENCE_REJECTION_2026-09-18.md`
+- `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md`
+
+V4, V4B refutation-only, and V4C opponent-turn refutation all preserved the
+known move-2/move-34 V3A.1 repairs but reproduced the same reflected LQ@6
+regression that converts a validated V3A.1 winning branch into a draw.
+
+Do not reopen this family by threshold-tuning without a new causal mechanism.
+The next active challenger track should compare directly against V3A.1 and
+change search structure rather than selective heuristic leaf bootstrap.
+
 ## General reusable benchmarks
 
 - `src/benchmarks/research-vs-production.ts`
