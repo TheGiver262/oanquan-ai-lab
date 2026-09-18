@@ -1,0 +1,56 @@
+name: forced-prefix-counter-refutation-search
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - "src/benchmarks/forced-prefix-counter-refutation-search.ts"
+      - ".github/workflows/forced-prefix-counter-refutation-search.yml"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/research/balance-modes.ts"
+      - "src/engine.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  search:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Search counter-refutations on the 50k forced-prefix loss
+        run: |
+          npx tsx src/benchmarks/forced-prefix-counter-refutation-search.ts \
+            --mode quan-gia-threefold \
+            --opening "B3:CW" \
+            --first-force-move 2 \
+            --first-force-action "B1:CW" \
+            --opener-agent A \
+            --baseline-simulations 50000 \
+            --probe-simulations 3000 \
+            --validation-simulations 50000 \
+            --max-probe-points 12 \
+            --validate-top 6 \
+            --max-board-moves 300 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: counter-refutation-qg3f-b3cw-m2-b1cw
+          path: result.json
+          retention-days: 7
