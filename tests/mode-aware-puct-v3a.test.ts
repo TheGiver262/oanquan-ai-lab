@@ -122,6 +122,77 @@ describe("mode-aware PUCT V3A", () => {
     expect(audited.rootLeafAudit?.reduce((sum, entry) => sum + entry.total.count, 0)).toBeGreaterThan(0);
   });
 
+  it("keeps incumbent V3A exactly unchanged at the explicit 1.8 leaf score weight", () => {
+    const state = createBalanceInitialState("quan-gia-threefold");
+    const opening = getBalanceActions(state).find(
+      (action) => balanceActionKey(action) === "B3:CW",
+    );
+    expect(opening).toBeDefined();
+    if (!opening) return;
+    const afterOpening = applyBalanceAction(state, opening);
+    expect(afterOpening.ok).toBe(true);
+    if (!afterOpening.ok) return;
+
+    const implicit = new ModeAwarePuctV3A().chooseAction(afterOpening.state, {
+      simulations: 2_048,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+    });
+    const explicit = new ModeAwarePuctV3A().chooseAction(afterOpening.state, {
+      simulations: 2_048,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+      leafScoreWeight: 1.8,
+    });
+
+    expect(explicit.action).toEqual(implicit.action);
+    expect(explicit.rootStats).toEqual(implicit.rootStats);
+    const { elapsedMs: implicitElapsed, ...implicitDiagnostics } = implicit.diagnostics;
+    const { elapsedMs: explicitElapsed, ...explicitDiagnostics } = explicit.diagnostics;
+    expect(implicitElapsed).toBeGreaterThanOrEqual(0);
+    expect(explicitElapsed).toBeGreaterThanOrEqual(0);
+    expect(explicitDiagnostics).toEqual(implicitDiagnostics);
+  });
+
+  it("changes leaf value only while keeping incumbent policy priors frozen", () => {
+    const state = createBalanceInitialState("quan-gia-threefold");
+    const opening = getBalanceActions(state).find(
+      (action) => balanceActionKey(action) === "B3:CW",
+    );
+    expect(opening).toBeDefined();
+    if (!opening) return;
+    const afterOpening = applyBalanceAction(state, opening);
+    expect(afterOpening.ok).toBe(true);
+    if (!afterOpening.ok) return;
+
+    const incumbent = new ModeAwarePuctV3A().chooseAction(afterOpening.state, {
+      simulations: 512,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+      leafScoreWeight: 1.8,
+    });
+    const zeroScoreLeaf = new ModeAwarePuctV3A().chooseAction(afterOpening.state, {
+      simulations: 512,
+      puctExploration: 1.5,
+      policyTemperature: 0.6,
+      leafScoreWeight: 0,
+    });
+
+    const priors = (decision: typeof incumbent) =>
+      new Map(decision.rootStats.map((entry) => [balanceActionKey(entry.action), entry.prior]));
+    expect(priors(zeroScoreLeaf)).toEqual(priors(incumbent));
+  });
+
+  it("rejects invalid leaf score weights", () => {
+    const state = createBalanceInitialState("standard");
+    expect(() =>
+      new ModeAwarePuctV3A().chooseAction(state, {
+        simulations: 16,
+        leafScoreWeight: -0.1,
+      }),
+    ).toThrow("leafScoreWeight must be a finite non-negative number");
+  });
+
   it("canonicalizes mirrored positional-repetition history together with the board", () => {
     const cw = createBalanceInitialState("quan-gia-positional-threefold");
     const ccw = createBalanceInitialState("quan-gia-positional-threefold");
