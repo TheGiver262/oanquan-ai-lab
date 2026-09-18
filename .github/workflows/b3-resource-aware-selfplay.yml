@@ -48,8 +48,11 @@ jobs:
             --baseline-simulations 10000 \
             --primary-simulations 10000 \
             --forecast-simulations 10000 \
-            --probe-simulations 1000 \
-            --validation-simulations 5000 \
+            --probe-simulations 2000 \
+            --validation-simulations 10000 \
+            --candidate-limit 10 \
+            --validate-top 2 \
+            --rescue-depth 2 \
             --rescue-until-board-move 12 \
             --max-board-moves 160 \
             --out result.json
