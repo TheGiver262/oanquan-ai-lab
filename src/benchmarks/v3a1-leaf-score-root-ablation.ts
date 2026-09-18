@@ -18,6 +18,7 @@ const fixedSimulations = intArg(
 );
 const leafScoreWeight = numberArg("--leaf-score-weight", 1.8);
 const leafBootstrap = readBootstrap("--leaf-bootstrap", "static");
+const leafQuiescenceScoreSwing = numberArg("--leaf-quiescence-score-swing", 10);
 const leafScoreMaterialMax = numberArg("--leaf-score-material-max", Number.POSITIVE_INFINITY);
 const outPath = stringArg("--out");
 
@@ -28,6 +29,7 @@ const decision = new ModeAwarePuctV3A().chooseAction(definition.state, {
   policyTemperature: 0.6,
   leafScoreWeight,
   leafBootstrap,
+  leafQuiescenceScoreSwing,
   leafScoreMaterialMax,
   auditRootLeaves: true,
 });
@@ -58,6 +60,7 @@ const result = {
     fixedSimulations,
     leafScoreWeight,
     leafBootstrap,
+    leafQuiescenceScoreSwing,
     leafScoreMaterialMax,
     puctExploration: 1.5,
     policyTemperature: 0.6,
@@ -205,9 +208,9 @@ function readCase(name: string, fallback: CaseId): CaseId {
 
 function readBootstrap(
   name: string,
-  fallback: "static" | "one_ply",
-): "static" | "one_ply" {
+  fallback: "static" | "one_ply" | "unstable_one_ply",
+): "static" | "one_ply" | "unstable_one_ply" {
   const value = stringArg(name) ?? fallback;
-  if (value === "static" || value === "one_ply") return value;
-  throw new Error(`${name} must be static or one_ply`);
+  if (value === "static" || value === "one_ply" || value === "unstable_one_ply") return value;
+  throw new Error(`${name} must be static, one_ply, or unstable_one_ply`);
 }
