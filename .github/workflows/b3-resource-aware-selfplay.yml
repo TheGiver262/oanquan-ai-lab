@@ -50,7 +50,7 @@ jobs:
             --forecast-simulations 5000 \
             --probe-simulations 1000 \
             --validation-simulations 5000 \
-            --candidate-limit 5 \
+            --candidate-limit 3 \
             --validate-top 2 \
             --rescue-depth 2 \
             --rescue-until-board-move 12 \
