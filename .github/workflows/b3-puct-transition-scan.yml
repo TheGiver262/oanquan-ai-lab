@@ -1,0 +1,54 @@
+name: b3-puct-transition-scan
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/b3-puct-transition-scan.yml"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: c2p6
+            c_puct: 2.6
+          - id: c2p8
+            c_puct: 2.8
+          - id: c3p0
+            c_puct: 3.0
+          - id: c3p2
+            c_puct: 3.2
+          - id: c3p4
+            c_puct: 3.4
+          - id: c3p6
+            c_puct: 3.6
+          - id: c3p8
+            c_puct: 3.8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Scan B3 transition
+        run: |
+          npx tsx src/benchmarks/balance-mode-v3a-selfplay.ts \
+            --mode quan-gia-threefold \
+            --opening B3:CW \
+            --opener-agent A \
+            --case-id "transition-${{ matrix.id }}" \
+            --fixed-simulations 20000 \
+            --puct-exploration "${{ matrix.c_puct }}" \
+            --policy-temperature 1.0 \
+            --max-board-moves 200 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: transition-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
