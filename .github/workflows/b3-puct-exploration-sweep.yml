@@ -1,0 +1,253 @@
+name: b3-puct-exploration-sweep
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/b3-puct-exploration-sweep.yml"
+      - "src/benchmarks/balance-mode-v3a-selfplay.ts"
+      - "src/research/mode-aware-puct-v3a.ts"
+      - "src/research/balance-modes.ts"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  sweep:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: base-B3-CW-A
+            config_id: base
+            opening: B3:CW
+            opener: A
+            c_puct: 1.5
+            temperature: 0.6
+          - id: base-B3-CW-B
+            config_id: base
+            opening: B3:CW
+            opener: B
+            c_puct: 1.5
+            temperature: 0.6
+          - id: base-B3-CCW-A
+            config_id: base
+            opening: B3:CCW
+            opener: A
+            c_puct: 1.5
+            temperature: 0.6
+          - id: base-B3-CCW-B
+            config_id: base
+            opening: B3:CCW
+            opener: B
+            c_puct: 1.5
+            temperature: 0.6
+          - id: mild-B3-CW-A
+            config_id: mild
+            opening: B3:CW
+            opener: A
+            c_puct: 2.5
+            temperature: 0.8
+          - id: mild-B3-CW-B
+            config_id: mild
+            opening: B3:CW
+            opener: B
+            c_puct: 2.5
+            temperature: 0.8
+          - id: mild-B3-CCW-A
+            config_id: mild
+            opening: B3:CCW
+            opener: A
+            c_puct: 2.5
+            temperature: 0.8
+          - id: mild-B3-CCW-B
+            config_id: mild
+            opening: B3:CCW
+            opener: B
+            c_puct: 2.5
+            temperature: 0.8
+          - id: flat1-B3-CW-A
+            config_id: flat1
+            opening: B3:CW
+            opener: A
+            c_puct: 2.5
+            temperature: 1.2
+          - id: flat1-B3-CW-B
+            config_id: flat1
+            opening: B3:CW
+            opener: B
+            c_puct: 2.5
+            temperature: 1.2
+          - id: flat1-B3-CCW-A
+            config_id: flat1
+            opening: B3:CCW
+            opener: A
+            c_puct: 2.5
+            temperature: 1.2
+          - id: flat1-B3-CCW-B
+            config_id: flat1
+            opening: B3:CCW
+            opener: B
+            c_puct: 2.5
+            temperature: 1.2
+          - id: flat2-B3-CW-A
+            config_id: flat2
+            opening: B3:CW
+            opener: A
+            c_puct: 4.0
+            temperature: 1.2
+          - id: flat2-B3-CW-B
+            config_id: flat2
+            opening: B3:CW
+            opener: B
+            c_puct: 4.0
+            temperature: 1.2
+          - id: flat2-B3-CCW-A
+            config_id: flat2
+            opening: B3:CCW
+            opener: A
+            c_puct: 4.0
+            temperature: 1.2
+          - id: flat2-B3-CCW-B
+            config_id: flat2
+            opening: B3:CCW
+            opener: B
+            c_puct: 4.0
+            temperature: 1.2
+          - id: wide1-B3-CW-A
+            config_id: wide1
+            opening: B3:CW
+            opener: A
+            c_puct: 4.0
+            temperature: 2.0
+          - id: wide1-B3-CW-B
+            config_id: wide1
+            opening: B3:CW
+            opener: B
+            c_puct: 4.0
+            temperature: 2.0
+          - id: wide1-B3-CCW-A
+            config_id: wide1
+            opening: B3:CCW
+            opener: A
+            c_puct: 4.0
+            temperature: 2.0
+          - id: wide1-B3-CCW-B
+            config_id: wide1
+            opening: B3:CCW
+            opener: B
+            c_puct: 4.0
+            temperature: 2.0
+          - id: wide2-B3-CW-A
+            config_id: wide2
+            opening: B3:CW
+            opener: A
+            c_puct: 6.0
+            temperature: 2.0
+          - id: wide2-B3-CW-B
+            config_id: wide2
+            opening: B3:CW
+            opener: B
+            c_puct: 6.0
+            temperature: 2.0
+          - id: wide2-B3-CCW-A
+            config_id: wide2
+            opening: B3:CCW
+            opener: A
+            c_puct: 6.0
+            temperature: 2.0
+          - id: wide2-B3-CCW-B
+            config_id: wide2
+            opening: B3:CCW
+            opener: B
+            c_puct: 6.0
+            temperature: 2.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Run B3 exploration config
+        run: |
+          npx tsx src/benchmarks/balance-mode-v3a-selfplay.ts \
+            --mode quan-gia-threefold \
+            --opening "${{ matrix.opening }}" \
+            --opener-agent "${{ matrix.opener }}" \
+            --case-id "${{ matrix.id }}" \
+            --fixed-simulations 20000 \
+            --puct-exploration "${{ matrix.c_puct }}" \
+            --policy-temperature "${{ matrix.temperature }}" \
+            --max-board-moves 200 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3sweep-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: sweep
+    if: always() && needs.sweep.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: b3sweep-*
+          path: results
+      - name: Summarize configs
+        run: |
+          python - <<'PY'
+          import glob,json,collections
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          groups=collections.defaultdict(list)
+          for r in rows:
+              cid=r["methodology"]["caseId"].split("-B3-")[0]
+              groups[cid].append(r)
+          md=["# B3 PUCT exploration sweep","",
+              "QG3F, reflection-canonical V3A, 20k fixed simulations/decision. No forced tactical moves.","",
+              "| config | c_puct | temp | games | OW | D | RW | U | avg opener margin |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+          summary={}
+          for cid,arr in sorted(groups.items()):
+              counts={"OW":0,"D":0,"RW":0,"U":0}
+              margins=[]
+              for r in arr:
+                  o=r["outcome"]
+                  if o["unresolved"]: lab="U"
+                  elif o["winnerAgent"] is None: lab="D"
+                  elif o["openerAgentValue"]==1: lab="OW"
+                  else: lab="RW"
+                  counts[lab]+=1
+                  if o["finalOpenerMargin"] is not None: margins.append(o["finalOpenerMargin"])
+              cfg=arr[0]["config"]
+              avg=sum(margins)/len(margins) if margins else None
+              md.append(f'| {cid} | {cfg["puctExploration"]} | {cfg["policyTemperature"]} | {len(arr)} | {counts["OW"]} | {counts["D"]} | {counts["RW"]} | {counts["U"]} | {avg:.1f} |')
+              summary[cid]={"config":{"puctExploration":cfg["puctExploration"],"policyTemperature":cfg["policyTemperature"]},"counts":counts,"averageOpenerMargin":avg,"games":arr}
+          with open("b3-puct-exploration-sweep.md","w",encoding="utf-8") as f:f.write("\n".join(md)+"\n")
+          with open("b3-puct-exploration-sweep.json","w",encoding="utf-8") as f:json.dump(summary,f,indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b3-puct-exploration-sweep-summary
+          path: |
+            b3-puct-exploration-sweep.md
+            b3-puct-exploration-sweep.json
+          retention-days: 7
