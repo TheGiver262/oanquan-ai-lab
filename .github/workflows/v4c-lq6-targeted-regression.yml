@@ -1,0 +1,43 @@
+name: v4c-lq6-targeted-regression
+
+on:
+  push:
+    branches:
+      - research/puct-v4-quiescence
+    paths:
+      - ".github/workflows/v4c-lq6-targeted-regression.yml"
+  workflow_dispatch:
+
+jobs:
+  pair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ccw
+            position: "LQ@6:B3:CCW:B3:CCW>T2:CW>B4:CCW>T4:CW>B3:CW>T4:CW"
+          - id: cw
+            position: "LQ@6:B3:CW:B3:CW>T4:CCW>B2:CW>T2:CCW>B3:CCW>T2:CCW"
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: V4C targeted LQ6 pair
+        run: |
+          npx tsx src/benchmarks/v4-vs-v3a1-fixed.ts \
+            --stage stage2 \
+            --candidate v4c \
+            --fixed-simulations 10000 \
+            --position-id "${{ matrix.position }}" \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v4c-lq6-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
