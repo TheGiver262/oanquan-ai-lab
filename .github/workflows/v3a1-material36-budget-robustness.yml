@@ -1,0 +1,98 @@
+name: v3a1-material36-budget-robustness
+
+on:
+  push:
+    branches:
+      - research/puct-v3a1-leaf-score
+    paths:
+      - ".github/workflows/v3a1-material36-budget-robustness.yml"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  probe:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: m2-68000, case_id: move2, budget: 68000 }
+          - { id: m2-80000, case_id: move2, budget: 80000 }
+          - { id: m2-90000, case_id: move2, budget: 90000 }
+          - { id: m2-99066, case_id: move2, budget: 99066 }
+          - { id: m2-120000, case_id: move2, budget: 120000 }
+          - { id: m34-80000, case_id: move34, budget: 80000 }
+          - { id: m34-90000, case_id: move34, budget: 90000 }
+          - { id: m34-100000, case_id: move34, budget: 100000 }
+          - { id: m34-120000, case_id: move34, budget: 120000 }
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Probe material36 across budgets
+        run: |
+          npx tsx src/benchmarks/v3a1-leaf-score-root-ablation.ts \
+            --case "${{ matrix.case_id }}" \
+            --fixed-simulations "${{ matrix.budget }}" \
+            --leaf-score-weight 1.8 \
+            --leaf-bootstrap static \
+            --leaf-score-material-max 36 \
+            --out result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: material36-budget-${{ matrix.id }}
+          path: result.json
+          retention-days: 7
+
+  summarize:
+    needs: probe
+    if: always() && needs.probe.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: material36-budget-*
+          path: results
+      - name: Build robustness summary
+        run: |
+          python - <<'PY'
+          import glob,json
+          rows=[]
+          for p in glob.glob("results/**/result.json",recursive=True):
+              with open(p,encoding="utf-8") as f: rows.append(json.load(f))
+          rows.sort(key=lambda r:(r["methodology"]["caseId"],r["methodology"]["fixedSimulations"]))
+          md=["# V3A.1 material36 budget robustness","",
+              "| case | budget | selected | focus A visits/mean | focus B visits/mean |",
+              "|---|---:|---|---|---|"]
+          for r in rows:
+              a,b=r["focus"]
+              sa=a["stats"]; sb=b["stats"]
+              md.append(f'| {r["methodology"]["caseId"]} | {r["methodology"]["fixedSimulations"]} | {r["selectedAction"]} | {a["action"]} {sa["visits"]}/{sa["meanValue"]:.6f} | {b["action"]} {sb["visits"]}/{sb["meanValue"]:.6f} |')
+          open("v3a1-material36-budget-summary.md","w",encoding="utf-8").write("\n".join(md)+"\n")
+          json.dump(rows,open("v3a1-material36-budget-summary.json","w",encoding="utf-8"),indent=2)
+          print("\n".join(md))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3a1-material36-budget-summary
+          path: |
+            v3a1-material36-budget-summary.md
+            v3a1-material36-budget-summary.json
+          retention-days: 7
