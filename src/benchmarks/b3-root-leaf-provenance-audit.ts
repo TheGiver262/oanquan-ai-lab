@@ -131,6 +131,8 @@ function summarize(
     ...stats,
     auditCount: audit.total.count,
     auditMeanReward: audit.total.meanReward,
+    replies: audit.replies,
+    heuristicComponents: audit.heuristicComponents,
     total: audit.total,
     cycle: {
       ...audit.cycle,
