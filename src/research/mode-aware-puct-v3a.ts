@@ -36,14 +36,7 @@ export type ModeAwarePuctV3AOptions = {
    * It does not alter priors, tree selection, exact solved propagation or
    * final root ranking.
    */
-  leafBootstrap?: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only";
-  /**
-   * V4 research-only selective-quiescence trigger. For unstable_one_ply,
-   * bootstrap through already-expanded children only when an immediate child
-   * changes the engine-agent score delta by at least this many points, or when
-   * an exact solved/terminal child is present.
-   */
-  leafQuiescenceScoreSwing?: number;
+  leafBootstrap?: "static" | "one_ply";
   /**
    * Research-only phase gate for the leaf score term. When finite, scoreDelta
    * contributes only when raw board material (dan stones + quan stones) is at
@@ -167,8 +160,7 @@ const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
 const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
-const DEFAULT_LEAF_BOOTSTRAP: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only" = "static";
-const DEFAULT_LEAF_QUIESCENCE_SCORE_SWING = 10;
+const DEFAULT_LEAF_BOOTSTRAP: "static" | "one_ply" = "static";
 const REAL_ACTION_REUSE_PLIES = 2;
 
 const REFLECT_PIT: Readonly<Record<PitId, PitId>> = Object.freeze({
@@ -245,8 +237,6 @@ export class ModeAwarePuctV3A {
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
     const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
     const leafBootstrap = options.leafBootstrap ?? DEFAULT_LEAF_BOOTSTRAP;
-    const leafQuiescenceScoreSwing =
-      options.leafQuiescenceScoreSwing ?? DEFAULT_LEAF_QUIESCENCE_SCORE_SWING;
     const leafScoreMaterialMax = options.leafScoreMaterialMax ?? Number.POSITIVE_INFINITY;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
@@ -255,9 +245,6 @@ export class ModeAwarePuctV3A {
     }
     if (!(leafScoreMaterialMax >= 0)) {
       throw new Error("leafScoreMaterialMax must be a non-negative number");
-    }
-    if (!Number.isFinite(leafQuiescenceScoreSwing) || leafQuiescenceScoreSwing < 0) {
-      throw new Error("leafQuiescenceScoreSwing must be a finite non-negative number");
     }
 
     let simulations = 0;
@@ -318,7 +305,6 @@ export class ModeAwarePuctV3A {
               leafScoreWeight,
               leafScoreMaterialMax,
               leafBootstrap,
-              leafQuiescenceScoreSwing,
             )
       );
       if (rootLeafAudit && path.length > 1) {
@@ -859,28 +845,11 @@ function heuristicLeafReward(
   engineAgent: ResearchAgentId,
   scoreWeight: number,
   scoreMaterialMax: number,
-  bootstrap: "static" | "one_ply" | "unstable_one_ply" | "unstable_refutation_only" | "unstable_opponent_refutation_only",
-  quiescenceScoreSwing: number,
+  bootstrap: "static" | "one_ply",
 ): number {
   const staticWeight = effectiveLeafScoreWeight(node.state, scoreWeight, scoreMaterialMax);
   const staticValue = normalizedAgentHeuristic(node.state, engineAgent, staticWeight);
   if (bootstrap === "static" || node.children.length === 0) return staticValue;
-  if (
-    (
-      bootstrap === "unstable_one_ply"
-      || bootstrap === "unstable_refutation_only"
-      || bootstrap === "unstable_opponent_refutation_only"
-    )
-    && !isTacticallyUnstableLeaf(node, engineAgent, quiescenceScoreSwing)
-  ) {
-    return staticValue;
-  }
-  if (
-    bootstrap === "unstable_opponent_refutation_only"
-    && currentAgent(node.state) === engineAgent
-  ) {
-    return staticValue;
-  }
 
   const maximizing = currentAgent(node.state) === engineAgent;
   let best = maximizing ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
@@ -890,33 +859,7 @@ function heuristicLeafReward(
       ?? normalizedAgentHeuristic(child.state, engineAgent, childWeight);
     best = maximizing ? Math.max(best, value) : Math.min(best, value);
   }
-  if (!Number.isFinite(best)) return staticValue;
-  return (
-    bootstrap === "unstable_refutation_only"
-    || bootstrap === "unstable_opponent_refutation_only"
-  )
-    ? Math.min(staticValue, best)
-    : best;
-}
-
-function isTacticallyUnstableLeaf(
-  node: Node,
-  engineAgent: ResearchAgentId,
-  minScoreSwing: number,
-): boolean {
-  const baseScoreDelta = agentScoreDelta(node.state, engineAgent);
-  for (const child of node.children) {
-    if (child.solvedOutcome !== null || child.state.game.status === "finished") return true;
-    const childScoreDelta = agentScoreDelta(child.state, engineAgent);
-    if (Math.abs(childScoreDelta - baseScoreDelta) >= minScoreSwing) return true;
-  }
-  return false;
-}
-
-function agentScoreDelta(state: BalanceState, agent: ResearchAgentId): number {
-  const seat = seatForAgent(state, agent);
-  const opponentSeat = otherPlayer(seat);
-  return state.game.scores[seat] - state.game.scores[opponentSeat];
+  return Number.isFinite(best) ? best : staticValue;
 }
 
 
