@@ -1,0 +1,63 @@
+name: temporary-repository-branch-cleanup
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/repository-branch-cleanup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  delete-obsolete-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+      - name: Delete superseded research branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          branches=(
+            "noop-check"
+            "research/b3-root-cause-pinpoint"
+            "research/bang-nhan-root-cause"
+            "research/exact-endgame-v4"
+            "research/exact-endgame-v4-final"
+            "research/exact-endgame-v4-pr-head"
+            "research/exact-endgame-v4-ready"
+            "research/gpn-puct-v3"
+            "research/gpn-puct-v3b"
+            "research/hybrid-exact-oracle-v6"
+            "research/mature-quan-v12"
+            "research/mcts-vs-top-ai-2026-09-07"
+            "research/opening-balance-v2"
+            "research/opening-balance-v3"
+            "research/opening-pie-balance"
+            "research/ordering-bug-tham-hoa"
+            "research/pie-threefold-cross-engine-v10"
+            "research/pnsum-puct-v3c"
+            "research/production-parity-v2"
+            "research/puct-oanquan"
+            "research/puct-v3a1-leaf-score"
+            "research/puct-v4-quiescence"
+            "research/puct-v5-transposition-graph"
+            "research/r1-production-parity"
+            "research/r1b-pie-vs-cam-quan"
+            "research/r1c-ai-promotion"
+            "research/r1c-repeat-parity"
+            "research/r1d-production-semantics"
+            "research/repetition-policy-v5"
+            "research/standard-unrestricted-v11"
+            "research/storage-cleanup"
+            "research/v3a-challenger-tournament"
+            "tmp"
+          )
+          for branch in "${branches[@]}"; do
+            echo "Deleting $branch"
+            git push origin --delete "$branch"
+          done
