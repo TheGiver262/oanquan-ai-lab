@@ -1,0 +1,20 @@
+name: temporary-delete-v5-branch
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/delete-v5-branch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - run: git push origin --delete "research/puct-v5-transposition-graph"
