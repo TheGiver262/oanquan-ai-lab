@@ -1,101 +1,163 @@
-# PUCT V5-A conservative transposition graph rejection — 2026-09-19
+# PUCT V5 transposition-graph family closure — 2026-09-19
 
 ## Verdict
 
-**REJECT / CLOSE V5-A. PUCT V3A.1 material36 remains the canonical research incumbent.**
+**REJECT / CLOSE V5-A and V5-B. PUCT V3A.1 material36 remains the canonical research incumbent.**
 
-V5-A shared deterministic graph state/expansion/exact solved outcomes across
-transpositions while keeping action visits, value sums and priors parent-local.
-V3A.1 policy priors, leaf evaluation, material36, PUCT constant, root ranking,
-cycle semantics and terminal proof rules were frozen.
+The V5 family tested whether transposition-aware graph search could improve
+effective search coverage without changing the promoted V3A.1 policy/value
+semantics.
 
-## Structural result
+PVS/NegaScout remains excluded from active evaluation.
 
-Current canonical rerun:
-- workflow: `v5-transposition-strength-gate`
-- run: `35435314695`
-- fixed simulations: 10,000
-- representative positions: 8
-- root disagreements vs V3A.1: **0 / 8**
-- transposition hits: **17,768 / 281,400 created edges**
-- transposition hit rate: **6.314%**
-- highest observed position hit rate: **12.740%**
-- aggregate unique-state reduction vs incumbent expanded-node count: **7.521%**
+## V5-A — conservative parent-local graph
 
-Thus transpositions are real and repeatable in the search space.
+V5-A shared deterministic graph state, expansion and exact solved outcomes
+across transpositions while keeping visits, value sums and priors parent-local.
 
-## Same-family strength screen
+Structural 10k result:
+- 8 representative positions;
+- 17,768 transposition hits / 281,400 created edges;
+- transposition hit rate: **6.314%**;
+- highest observed position hit rate: **12.740%**;
+- unique-state reduction vs incumbent expanded-node count: **7.521%**;
+- root disagreements vs V3A.1: **0 / 8**.
 
-Equal 10,000 fixed simulations per decision, every exact position seat-swapped:
+Same-family 10k screen:
+- Stage 1: 13 W / 5 D / 12 L / 2 unresolved, pairs 0/14/0;
+- Stage 2: 14 W / 2 D / 14 L / 2 unresolved, pairs 0/15/0;
+- Stage 3: 4 W / 2 D / 4 L / 0 unresolved, pairs 0/5/0;
+- aggregate completed pairs: **0 favorable / 34 neutral / 0 unfavorable**.
 
-| Stage | V5 W | Draw | V3A.1 W | Unresolved | Pair +/=/- | Mean pair diff |
-|---|---:|---:|---:|---:|---|---:|
-| Stage 1 | 13 | 5 | 12 | 2 | 0/14/0 | 0 |
-| Stage 2 | 14 | 2 | 14 | 2 | 0/15/0 | 0 |
-| Stage 3 | 4 | 2 | 4 | 0 | 0/5/0 | 0 |
+Efficiency audit, workflow run `35435663577`:
+- V3A.1 elapsed: 8,065.35 ms;
+- V5-A elapsed: 10,282.39 ms;
+- graph/incumbent elapsed ratio: **1.2749**;
+- median per-decision ratio: **1.2923**;
+- V5-A was about **27.5% slower in aggregate**;
+- root disagreements across 24 timing observations: **0**.
+
+V5-A therefore demonstrated real transposition reuse but failed to turn that
+reuse into either strength gain or compute-efficiency gain.
+
+## V5-B — shared-state-Q graph
+
+V5-B retained parent-local edge visits/priors but additionally shared empirical
+state Q across transposed graph nodes.
+
+This was deliberately more aggressive than V5-A while still freezing:
+- V3A.1 material36 leaf evaluation;
+- policy priors and temperature;
+- PUCT exploration constant;
+- root ranking by parent-local visits;
+- exact terminal/solved semantics;
+- cycle cutoff semantics.
+
+### 10k same-family screen
+
+| Stage | V5-B W | Draw | V3A.1 W | Unresolved | Pair +/=/- |
+|---|---:|---:|---:|---:|---|
+| Stage 1 | 13 | 5 | 12 | 2 | 0/14/0 |
+| Stage 2 | 14 | 2 | 14 | 2 | 0/15/0 |
+| Stage 3 | 4 | 2 | 4 | 0 | 0/5/0 |
 
 Aggregate:
-- resolved W-D-L from V5 perspective: **31-9-30**
-- unresolved: **4**
-- completed pairs: **34**
-- favorable / neutral / unfavorable: **0 / 34 / 0**
-- mean pair diff: **0**
+- W-D-L: **31-9-30**;
+- unresolved: **4**;
+- completed pairs: **34**;
+- favorable / neutral / unfavorable: **0 / 34 / 0**.
 
-V5-A therefore showed no broad strength regression, but also no validated
-strength improvement and no root disagreement on the structural corpus.
+### 20k strong screen
 
-## Compute-efficiency audit
-
-Workflow:
-- `v5-transposition-efficiency`
-- run: `35435663577`
-
-Protocol:
-- 10,000 fixed simulations per decision
-- 8 positions
-- 3 replicates
-- 24 paired timing observations
-- one warm-up per engine
-- execution order alternated between replicates
+| Stage | V5-B W | Draw | V3A.1 W | Unresolved | Pair +/=/- |
+|---|---:|---:|---:|---:|---|
+| Stage 1 | 14 | 4 | 14 | 0 | 0/16/0 |
+| Stage 2 | 13 | 4 | 13 | 2 | 0/15/0 |
+| Stage 3 | 4 | 2 | 4 | 0 | 0/5/0 |
 
 Aggregate:
-- V3A.1 elapsed: **8,065.35 ms**
-- V5-A elapsed: **10,282.39 ms**
-- graph / incumbent elapsed ratio: **1.2749**
-- median per-decision ratio: **1.2923**
-- V5-A is therefore about **27.5% slower in aggregate** and **29.2% slower at the median**
-- incumbent expanded nodes: **855,240**
-- graph unique nodes: **790,920**
-- unique-state reduction: **7.521%**
-- graph transposition hits: **53,304 / 844,200 edges = 6.314%**
-- root disagreements across all 24 timing observations: **0**
+- W-D-L: **31-10-31**;
+- unresolved: **2**;
+- completed pairs: **36**;
+- favorable / neutral / unfavorable: **0 / 36 / 0**.
 
-GitHub-hosted runner timing is noisy, but the slowdown is large, consistent
-across the aggregate/median, and opposite the intended compute-efficiency goal.
+### 50k strong screen
 
-## Interpretation
+| Stage | V5-B W | Draw | V3A.1 W | Unresolved | Pair +/=/- |
+|---|---:|---:|---:|---:|---|
+| Stage 1 | 13 | 4 | 14 | 1 | 0/15/0 |
+| Stage 2 | 11 | 8 | 11 | 2 | 0/15/0 |
+| Stage 3 | 4 | 2 | 4 | 0 | 0/5/0 |
 
-The conservative parent-local-edge graph design is safe but too conservative to
-produce a search-quality change, while hash-map/graph bookkeeping costs more
-than the saved state duplication at the observed transposition density.
+Aggregate:
+- W-D-L: **28-14-29**;
+- unresolved: **3**;
+- completed pairs: **35**;
+- favorable / neutral / unfavorable: **0 / 35 / 0**.
 
-The result does **not** show that transposition-aware search is intrinsically
-bad for Ô Ăn Quan. It shows that this V5-A architecture fails its promotion
-criterion:
+Across 10k + 20k + 50k, V5-B produced **105 completed pairs**:
+- favorable: **0**;
+- neutral: **105**;
+- unfavorable: **0**.
 
-- measurable transposition reuse: yes;
-- same-family non-regression: yes;
-- positive validated disagreement: no;
-- material compute-efficiency gain: **no — material slowdown instead**.
+Thus shared-state-Q remained non-regressive but showed no validated strength
+improvement at any tested broad-search budget.
+
+### Efficiency audit
+
+10k x 3 timing audit:
+- V3A.1 elapsed: **8,042.19 ms**;
+- V5-B elapsed: **9,976.72 ms**;
+- graph/incumbent elapsed ratio: **1.2405**;
+- median per-decision ratio: **1.2884**;
+- V5-B was about **24.1% slower in aggregate**;
+- unique-state reduction: **8.244%**;
+- transposition hit rate: **6.411%**;
+- root disagreements: **0**.
+
+Shared-state-Q improved state reuse slightly relative to V5-A but did not
+recover the graph-management overhead.
+
+### 100k targeted scaling
+
+Three transposition-rich Stage 3 targets were attempted:
+
+- `B3:CW:material@12`: 1 W / 0 D / 1 L, pairDiff 0;
+- `B3:CCW:strategic@19`: 0 W / 2 D / 0 L, pairDiff 0;
+- `B3:CW:material@19`: **failed with JavaScript heap OOM**.
+
+The failing run reached the Node heap limit near 6 GB after roughly 220 seconds.
+This is a scalability/resource failure, not an illegal move or game-logic
+failure.
+
+Strong-gate workflow: `v5b-shared-state-q-strong-gate`, run `35437892841`.
+
+## Family-level interpretation
+
+Both graph designs showed real, repeatable transpositions in Ô Ăn Quan search.
+However:
+
+1. V5-A reduced duplicate state expansion but was ~27.5% slower and behaviorally neutral.
+2. V5-B shared empirical state Q more aggressively, but remained behaviorally
+   neutral over **105/105 completed pairs** across 10k/20k/50k.
+3. V5-B was still ~24.1% slower in aggregate.
+4. V5-B also exposed poor memory scaling with a 100k OOM on one difficult
+   transposition-rich position.
+
+The evidence does **not** show transposition-aware search is intrinsically bad.
+It shows these retained full-graph architectures do not justify their CPU/RAM
+cost for the observed transposition density.
 
 ## Decision consequence
 
-- V3A.1 material36 remains incumbent.
-- Do not promote V5-A.
-- Do not spend 20k/50k or Trạng Nguyên gate budget on V5-A.
-- Do not rescue V5-A by tuning C_puct, priors, leaf weights or material36.
-- If transposition search is revisited, it needs a materially different
-  architecture (for example lower-overhead caching or deliberately shared
-  search statistics), not incremental tuning of this conservative graph.
-- V4 selective one-ply leaf bootstrap remains closed.
+- V3A.1 material36 remains canonical.
+- V5-A and V5-B are closed and must not be promoted.
+- Do not spend a Trạng Nguyên gate on V5-B: there is no promotion signal.
+- Do not rescue this family by tuning C_puct, priors, material36 or leaf weights.
+- Do not continue with another full retained graph that only changes how Q/visits
+  are shared.
+- If transposition reuse is revisited, use a lower-overhead bounded cache /
+  transposition table rather than a retained search graph, or pursue a
+  structurally different search mechanism.
+- V4 selective one-ply leaf-bootstrap remains closed.
 - PVS/NegaScout remains excluded from active evaluation.
