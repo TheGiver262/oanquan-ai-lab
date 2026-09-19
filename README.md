@@ -99,12 +99,12 @@ Every tournament alternates the research AI between P0 and P1.
 
 ## Current research status
 
-- The algorithm race is closed; **PUCT V3A** is the current validated incumbent.
-- PVS/NegaScout is historical only and excluded from active evaluation unless explicitly reopened.
-- The active track is **game balance and B3 search-discovery**.
-- Balance benchmarks use reflection-canonical fixed-simulation PUCT; wall-clock runs are not canonical balance evidence.
-- Research-only Positional Threefold is implemented and regression-tested, but it did not solve opening balance by itself.
-- Three independent B3 defensive resources survived 100k simulations/decision in paired reflection/A-B validation; the active question is whether search can discover them without forced moves.
+- **PUCT V3A.1 material36** is the current validated research incumbent.
+- V3A.1 fixes the validated V3A early/midgame score-horizon bias while remaining non-regressive against V3A across the promoted 10k/20k/50k fixed-simulation corpus.
+- V4/V4B/V4C selective one-ply quiescence is closed and rejected after reproducing the same reflection-consistent LQ@6 regression.
+- PVS/NegaScout is historical only and excluded from active evaluation.
+- The active baseline for future challengers is V3A.1; new work should change search structure rather than retune the closed one-ply leaf-bootstrap family.
+- Balance/B3 evidence remains available as canonical audit and validation documents.
 
 See `docs/research/CANONICAL_RESEARCH_INDEX_2026-09-18.md` for the authoritative list of current evidence and reproducible workflows.
 
@@ -143,7 +143,9 @@ src/
   cli.ts
   research/
     puct-v3a.ts
+    puct-v3a1.ts
     mode-aware-puct-v3a.ts
+    mode-aware-puct-v3a1.ts
     resource-aware-puct-v3a.ts
     balance-modes.ts
     ...historical/auxiliary research engines
@@ -169,7 +171,7 @@ results/
   .gitkeep
 ```
 
-Committed benchmark outputs are intentionally not kept in `results/`. Temporary execution outputs belong in GitHub Actions artifacts; durable conclusions belong in canonical research documents.
+Committed benchmark outputs are intentionally not kept in `results/`. Temporary execution outputs belong in GitHub Actions artifacts; durable conclusions belong in canonical research documents. Closed one-off experiments are removed once their verdict is consolidated.
 
 ## Research rules
 
