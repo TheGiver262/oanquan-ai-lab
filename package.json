@@ -3,7 +3,7 @@
   "version": "0.6.0",
   "private": false,
   "type": "module",
-  "description": "Standalone Ô Ăn Quan AI research lab: production-reference search, MCTS, independent PVS search, exact and SCC-aware endgame analysis, self-play, opening analysis and balance experiments.",
+  "description": "Standalone Ô Ăn Quan AI research lab: production-reference search, canonical PUCT V3A.1, balance analysis, endgame analysis, self-play, opening analysis and reproducible validation.",
   "license": "MIT",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
