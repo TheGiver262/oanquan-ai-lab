@@ -102,8 +102,9 @@ Every tournament alternates the research AI between P0 and P1.
 - **PUCT V3A.1 material36** is the current validated research incumbent.
 - V3A.1 fixes the validated V3A early/midgame score-horizon bias while remaining non-regressive against V3A across the promoted 10k/20k/50k fixed-simulation corpus.
 - V4/V4B/V4C selective one-ply quiescence is closed and rejected after reproducing the same reflection-consistent LQ@6 regression.
+- V5-A/V5-B retained transposition-graph search is also closed: no strength gain across 10k/20k/50k, ~24–28% timing overhead, and V5-B hit a ~6 GB heap OOM on one 100k target.
 - PVS/NegaScout is historical only and excluded from active evaluation.
-- The active baseline for future challengers is V3A.1; new work should change search structure rather than retune the closed one-ply leaf-bootstrap family.
+- The active baseline for future challengers is V3A.1. Do not continue the closed one-ply bootstrap or retained full-graph families without a new causal/architectural mechanism.
 - Balance/B3 evidence remains available as canonical audit and validation documents.
 
 See `docs/research/CANONICAL_RESEARCH_INDEX_2026-09-18.md` for the authoritative list of current evidence and reproducible workflows.
