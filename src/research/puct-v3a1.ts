@@ -7,10 +7,7 @@ import {
 
 export const V3A1_LEAF_SCORE_MATERIAL_MAX = 36 as const;
 
-export type PuctV3A1Options = Omit<
-  PuctV3AOptions,
-  "leafScoreMaterialMax" | "leafBootstrap" | "leafQuiescenceScoreSwing"
->;
+export type PuctV3A1Options = Omit<PuctV3AOptions, "leafScoreMaterialMax">;
 
 /**
  * Canonical PUCT V3A.1 research incumbent.
