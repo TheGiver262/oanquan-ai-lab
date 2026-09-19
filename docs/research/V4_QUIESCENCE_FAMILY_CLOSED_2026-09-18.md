@@ -25,7 +25,6 @@ Both unfavorable pairs were the reflected LQ@6 B3 positions. Independent fresh
 V3A.1 continuation showed the V4 branch changed a validated 37-33 P0 win into
 35-35.
 
-See `V4_SELECTIVE_QUIESCENCE_REJECTION_2026-09-18.md`.
 
 ## V4B — refutation-only clamp
 
@@ -123,6 +122,10 @@ search**, with V3A.1 evaluation and policy behavior frozen.
 
 ## Execution evidence
 
-- V4B workflow: `v4b-refutation-only-gate`, run `35361781615`.
-- V4C workflow: `v4c-opponent-refutation-gate`, run `35362451181`.
-- V4C targeted LQ@6 workflow: `v4c-lq6-targeted-regression`, run `35363011856`.
+- V4 q10 broad screen: `v4-vs-v3a1-10k-screen`, run `35346349241`.
+- V4B refutation-only gate: run `35361781615`.
+- V4C opponent-only gate: run `35362451181`.
+- V4C targeted LQ@6 regression: run `35363011856`.
+
+The one-off V4 engines, tests, trace benchmarks and workflows were deleted during
+repository cleanup after this consolidated closure record became canonical.
