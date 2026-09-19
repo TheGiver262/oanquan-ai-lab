@@ -76,6 +76,19 @@ The experimental V4 engines, tests, trace benchmarks and one-off workflows were 
 
 Do not reopen this family by threshold tuning. A future challenger must compare against V3A.1 and should change search structure rather than selectively replacing heuristic leaf values.
 
+## Closed V5 transposition-graph track
+
+V5-A conservative transposition graph is closed/rejected:
+- `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md`
+
+It demonstrated real graph reuse (~6.31% transposition hit rate and ~7.52%
+fewer unique states on the structural corpus) and no same-family regression,
+but remained behaviorally neutral and was ~27.5% slower in aggregate at equal
+10k simulations. It therefore failed the compute-efficiency/promotion gate.
+
+Do not rerun V5-A at larger budgets without a materially different graph
+architecture.
+
 ## Reusable general surface
 
 - `src/benchmarks/research-vs-production.ts`
