@@ -1,5 +1,37 @@
 # Core balance-mode protocol — 2026-09-18
 
+## Superseding algorithm-research protocol — 2026-09-21
+
+For **all future AI algorithm research, self-play, tournament and promotion
+simulations**, Standard is no longer the primary evaluation ruleset.
+
+Every new challenger must be evaluated on **both** target modes:
+
+1. **Pie + Threefold** — mode id `pie-threefold`.
+2. **Quan Gia + Threefold** — mode id `quan-gia-threefold`.
+
+Standard remains available only as a historical/reference control when useful;
+it must not be the sole basis for promoting or rejecting a future algorithm.
+
+The reason is methodological: Standard retains a material first-player/P0 bias
+in the balance research, while the product-oriented research target is to
+evaluate search under anti-bias/repetition-safe modes.
+
+Consequences:
+- V3A.1 material36 is still the validated **Standard** incumbent, but its
+  incumbent status on Pie + Threefold and Quan Gia + Threefold must be
+  revalidated.
+- V4 and V5 closure evidence remains valid for Standard only; those verdicts
+  must not be generalized to the two target modes without rerunning them there.
+- Future Stage 1/2/3 corpora must be generated/replayed under the exact target
+  mode semantics rather than replayed from `createInitialState()` with the
+  default Standard ruleset.
+- Promotion requires acceptable evidence on **both** target modes. A challenger
+  that only passes one target mode is not a general replacement.
+- Pie/Threefold comparisons must preserve swap ownership semantics exactly.
+- Quan Gia/Threefold must use `mature_quan_v1` capture rules plus the same
+  corrected move-pair Threefold termination semantics.
+
 ## Scope decision
 
 The balance study no longer uses forced openings as candidate competitive modes. In particular, `B3:CW`, `B3:CCW`, and any mandatory opening move are removed from the primary candidate set. Historical opening research remains useful as evidence about opening bias, but players must retain free opening choice in the target product mode.
