@@ -1,0 +1,54 @@
+name: temporary-repository-history-cleanup
+
+on:
+  push:
+    branches:
+      - research/balanced-mode-tournament
+    paths:
+      - ".github/workflows/repository-history-cleanup.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Delete obsolete archive branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin --delete archive/research-v5-v12 || true
+
+      - name: Prune completed historical Actions runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN: ${{ github.run_id }}
+          CLEAN_SHA: 3e22bad0ad02f8550521e172c4ea36a0e4248c30
+        run: |
+          KEEP_CI="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$CLEAN_SHA&per_page=100" --jq '[.workflow_runs[] | select(.name=="ci")] | sort_by(.created_at) | reverse | .[0].id // empty')"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id,.status,.name] | @tsv' |
+          while IFS=$'\t' read -r id status name; do
+            if [ "$id" = "$CURRENT_RUN" ] || [ "$id" = "$KEEP_CI" ]; then
+              continue
+            fi
+            if [ "$status" = "completed" ]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" || true
+            fi
+          done
+
+      - name: Remove this temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/repository-history-cleanup.yml
+          git commit -m "chore: remove temporary repository cleanup workflow"
+          git push origin HEAD:research/balanced-mode-tournament
