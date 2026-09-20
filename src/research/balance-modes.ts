@@ -9,37 +9,15 @@ import {
 import type { GameState, MoveEvent, PlayerId, PlayerMove, ResolvedRuleset } from "../types.js";
 
 export type ResearchAgentId = "A" | "B";
-
-export type BalanceModeId =
-  | "standard"
-  | "pie-threefold"
-  | "delayed-pie-4-threefold"
-  | "delayed-pie-6-threefold"
-  | "open-pie-threefold"
-  | "quan-gia"
-  | "quan-gia-threefold"
-  | "quan-gia-positional-threefold"
-  | "quan-gia-pie-threefold";
-
+export type BalanceModeId = "standard" | "pie-threefold" | "quan-gia-threefold";
 export type SeatToAgent = Readonly<Record<PlayerId, ResearchAgentId>>;
 
 export type SwapState = Readonly<{
   enabled: boolean;
   used: boolean;
-  /** Research-agent identity that started the game as the responder (logical P1). */
   responderAgent: ResearchAgentId;
-  /** Number of ordinary board moves already taken by the original responder. */
   responderNormalMovesTaken: number;
-  /** null means no expiry; 0 means swap disabled. */
-  maxResponderNormalMovesBeforeExpiry: number | null;
-}>;
-
-export type PositionalHistoryNode = Readonly<{
-  key: string;
-  parent: PositionalHistoryNode | null;
-  depth: number;
-  hashA: number;
-  hashB: number;
+  maxResponderNormalMovesBeforeExpiry: number;
 }>;
 
 export type BalanceState = Readonly<{
@@ -47,11 +25,6 @@ export type BalanceState = Readonly<{
   game: GameState;
   seatToAgent: SeatToAgent;
   swap: SwapState;
-  /**
-   * Persistent exact start-of-turn strategic-position history. The linked
-   * representation keeps PUCT nodes O(1) in history-storage overhead.
-   */
-  positionalHistory?: PositionalHistoryNode | null;
 }>;
 
 export type BalanceAction =
@@ -72,47 +45,27 @@ export function createBalanceInitialState(
   mode: BalanceModeId,
   openerAgent: ResearchAgentId = "A",
 ): BalanceState {
-  const ruleset = mode === "quan-gia" || mode === "quan-gia-positional-threefold"
-    ? MATURE_QUAN_RULESET
-    : mode === "quan-gia-threefold" || mode === "quan-gia-pie-threefold"
-      ? MATURE_QUAN_THREEFOLD_RULESET
-      : modeUsesThreefold(mode)
-        ? CLASSIC_STANDARD_THREEFOLD_RULESET
+  const ruleset =
+    mode === "pie-threefold"
+      ? CLASSIC_STANDARD_THREEFOLD_RULESET
+      : mode === "quan-gia-threefold"
+        ? MATURE_QUAN_THREEFOLD_RULESET
         : CLASSIC_STANDARD_RULESET;
   const responderAgent = otherResearchAgent(openerAgent);
-  const seatToAgent: SeatToAgent = Object.freeze({ P0: openerAgent, P1: responderAgent });
-  const game = createInitialState(ruleset);
-
   return {
     mode,
-    game,
-    seatToAgent,
+    game: createInitialState(ruleset),
+    seatToAgent: { P0: openerAgent, P1: responderAgent },
     swap: initialSwapState(mode, responderAgent),
-    positionalHistory: modeUsesPositionalThreefold(mode)
-      ? buildPositionalHistory([positionalRepetitionKey(game)])
-      : null,
   };
 }
 
 export function modeUsesThreefold(mode: BalanceModeId): boolean {
-  return mode === "pie-threefold"
-    || mode === "delayed-pie-4-threefold"
-    || mode === "delayed-pie-6-threefold"
-    || mode === "open-pie-threefold"
-    || mode === "quan-gia-threefold"
-    || mode === "quan-gia-pie-threefold";
-}
-
-export function modeUsesPositionalThreefold(mode: BalanceModeId): boolean {
-  return mode === "quan-gia-positional-threefold";
+  return mode === "pie-threefold" || mode === "quan-gia-threefold";
 }
 
 export function modeHasSwap(mode: BalanceModeId): boolean {
-  return mode === "pie-threefold"
-    || mode === "delayed-pie-4-threefold"
-    || mode === "delayed-pie-6-threefold"
-    || mode === "open-pie-threefold"
-    || mode === "quan-gia-pie-threefold";
+  return mode === "pie-threefold";
 }
 
 export function currentAgent(state: BalanceState): ResearchAgentId {
@@ -129,12 +82,12 @@ export function winnerAgent(state: BalanceState): ResearchAgentId | null {
 }
 
 export function isSwapEligible(state: BalanceState): boolean {
-  if (state.game.status !== "playing") return false;
-  if (!state.swap.enabled || state.swap.used) return false;
-  if (state.game.moveNumber < 1) return false;
-  if (currentAgent(state) !== state.swap.responderAgent) return false;
-  const limit = state.swap.maxResponderNormalMovesBeforeExpiry;
-  return limit === null || state.swap.responderNormalMovesTaken < limit;
+  return state.game.status === "playing"
+    && state.swap.enabled
+    && !state.swap.used
+    && state.game.moveNumber >= 1
+    && currentAgent(state) === state.swap.responderAgent
+    && state.swap.responderNormalMovesTaken < state.swap.maxResponderNormalMovesBeforeExpiry;
 }
 
 export function getBalanceActions(state: BalanceState): BalanceAction[] {
@@ -144,15 +97,6 @@ export function getBalanceActions(state: BalanceState): BalanceAction[] {
   return actions;
 }
 
-/**
- * SWAP is a protocol action, not a board move:
- * - only the original responder owns the one-shot right;
- * - the board, history, scores and logical currentPlayer remain unchanged;
- * - seat ownership flips P0<->P1;
- * - because logical currentPlayer does not change, the newly owning agent acts next.
- *
- * This matches classic Pie after move 1 and generalizes cleanly to delayed/open Pie.
- */
 export function applyBalanceAction(state: BalanceState, action: BalanceAction): BalanceApplyResult {
   if (state.game.status !== "playing") return { ok: false, error: "match_finished" };
 
@@ -171,38 +115,24 @@ export function applyBalanceAction(state: BalanceState, action: BalanceAction): 
     };
   }
 
-  if (action.move.player !== state.game.currentPlayer) return { ok: false, error: "wrong_logical_seat" };
+  if (action.move.player !== state.game.currentPlayer) {
+    return { ok: false, error: "wrong_logical_seat" };
+  }
   const actor = currentAgent(state);
   const applied = applyMove(state.game, action.move);
   if (!applied.ok) return { ok: false, error: applied.error };
-
-  const nextGame = applied.state;
-  const nextEvents = [...applied.events];
-  let positionalHistory = state.positionalHistory ?? null;
-
-  if (modeUsesPositionalThreefold(state.mode) && nextGame.status === "playing") {
-    const positionKey = positionalRepetitionKey(nextGame);
-    const priorOccurrences = countPositionalOccurrences(positionalHistory, positionKey);
-    positionalHistory = appendPositionalHistory(positionalHistory, positionKey);
-    if (priorOccurrences + 1 >= 3) {
-      finishByPositionalRepetition(nextGame, nextEvents);
-    }
-  }
 
   return {
     ok: true,
     state: {
       ...state,
-      game: nextGame,
-      swap: actor === state.swap.responderAgent && state.swap.enabled && !state.swap.used
-        ? {
-            ...state.swap,
-            responderNormalMovesTaken: state.swap.responderNormalMovesTaken + 1,
-          }
-        : state.swap,
-      positionalHistory,
+      game: applied.state,
+      swap:
+        actor === state.swap.responderAgent && state.swap.enabled && !state.swap.used
+          ? { ...state.swap, responderNormalMovesTaken: state.swap.responderNormalMovesTaken + 1 }
+          : state.swap,
     },
-    events: nextEvents,
+    events: applied.events,
   };
 }
 
@@ -225,174 +155,27 @@ export function cloneBalanceState(state: BalanceState): BalanceState {
     },
     seatToAgent: { ...state.seatToAgent },
     swap: { ...state.swap },
-    positionalHistory: state.positionalHistory ?? null,
   };
 }
 
 function initialSwapState(mode: BalanceModeId, responderAgent: ResearchAgentId): SwapState {
-  if (mode === "pie-threefold" || mode === "quan-gia-pie-threefold") {
-    return {
-      enabled: true,
-      used: false,
-      responderAgent,
-      responderNormalMovesTaken: 0,
-      maxResponderNormalMovesBeforeExpiry: 1,
-    };
-  }
-  if (mode === "delayed-pie-4-threefold") {
-    return {
-      enabled: true,
-      used: false,
-      responderAgent,
-      responderNormalMovesTaken: 0,
-      maxResponderNormalMovesBeforeExpiry: 2,
-    };
-  }
-  if (mode === "delayed-pie-6-threefold") {
-    return {
-      enabled: true,
-      used: false,
-      responderAgent,
-      responderNormalMovesTaken: 0,
-      maxResponderNormalMovesBeforeExpiry: 3,
-    };
-  }
-  if (mode === "open-pie-threefold") {
-    return {
-      enabled: true,
-      used: false,
-      responderAgent,
-      responderNormalMovesTaken: 0,
-      maxResponderNormalMovesBeforeExpiry: null,
-    };
-  }
-  return {
-    enabled: false,
-    used: false,
-    responderAgent,
-    responderNormalMovesTaken: 0,
-    maxResponderNormalMovesBeforeExpiry: 0,
-  };
+  return mode === "pie-threefold"
+    ? {
+        enabled: true,
+        used: false,
+        responderAgent,
+        responderNormalMovesTaken: 0,
+        maxResponderNormalMovesBeforeExpiry: 1,
+      }
+    : {
+        enabled: false,
+        used: false,
+        responderAgent,
+        responderNormalMovesTaken: 0,
+        maxResponderNormalMovesBeforeExpiry: 0,
+      };
 }
 
 function otherResearchAgent(agent: ResearchAgentId): ResearchAgentId {
   return agent === "A" ? "B" : "A";
-}
-
-
-const POSITION_HISTORY_HASH_A_SEED = 0x811c9dc5;
-const POSITION_HISTORY_HASH_B_SEED = 0x9e3779b9;
-
-export function appendPositionalHistory(
-  parent: PositionalHistoryNode | null,
-  key: string,
-): PositionalHistoryNode {
-  return {
-    key,
-    parent,
-    depth: (parent?.depth ?? 0) + 1,
-    hashA: hashHistoryAppend(parent?.hashA ?? POSITION_HISTORY_HASH_A_SEED, key, 0x01000193),
-    hashB: hashHistoryAppend(parent?.hashB ?? POSITION_HISTORY_HASH_B_SEED, key, 0x27d4eb2d),
-  };
-}
-
-export function buildPositionalHistory(keys: readonly string[]): PositionalHistoryNode | null {
-  let history: PositionalHistoryNode | null = null;
-  for (const key of keys) history = appendPositionalHistory(history, key);
-  return history;
-}
-
-export function positionalHistoryContextKey(history: PositionalHistoryNode | null | undefined): string {
-  if (!history) return "-";
-  return [
-    history.depth,
-    history.hashA.toString(16).padStart(8, "0"),
-    history.hashB.toString(16).padStart(8, "0"),
-  ].join(":");
-}
-
-export function reflectPositionalHistory(
-  history: PositionalHistoryNode | null | undefined,
-): PositionalHistoryNode | null {
-  if (!history) return null;
-  const keys: string[] = [];
-  for (let cursor: PositionalHistoryNode | null = history; cursor; cursor = cursor.parent) {
-    keys.push(reflectPositionalRepetitionKey(cursor.key));
-  }
-  keys.reverse();
-  return buildPositionalHistory(keys);
-}
-
-function countPositionalOccurrences(history: PositionalHistoryNode | null, key: string): number {
-  let count = 0;
-  for (let cursor = history; cursor; cursor = cursor.parent) {
-    if (cursor.key === key) count += 1;
-  }
-  return count;
-}
-
-function hashHistoryAppend(seed: number, key: string, prime: number): number {
-  let hash = seed ^ 0x7c;
-  for (let index = 0; index < key.length; index += 1) {
-    hash ^= key.charCodeAt(index);
-    hash = Math.imul(hash, prime);
-  }
-  return hash >>> 0;
-}
-
-const POSITION_REFLECT_PIT: Readonly<Record<string, string>> = Object.freeze({
-  L: "R",
-  R: "L",
-  T1: "T5",
-  T2: "T4",
-  T3: "T3",
-  T4: "T2",
-  T5: "T1",
-  B1: "B5",
-  B2: "B4",
-  B3: "B3",
-  B4: "B2",
-  B5: "B1",
-});
-
-export function positionalRepetitionKey(game: GameState): string {
-  return JSON.stringify([
-    game.currentPlayer,
-    game.scores.P0,
-    game.scores.P1,
-    game.pits.map((pit) => [pit.id, pit.stones, pit.quanStones]),
-  ]);
-}
-
-export function reflectPositionalRepetitionKey(key: string): string {
-  const parsed = JSON.parse(key) as [
-    PlayerId,
-    number,
-    number,
-    Array<[string, number, number]>,
-  ];
-  const [currentPlayer, p0Score, p1Score, pits] = parsed;
-  const byId = new Map(pits.map((entry) => [entry[0], entry] as const));
-  const reflectedPits = pits.map(([targetId]) => {
-    const sourceId = POSITION_REFLECT_PIT[targetId];
-    const source = sourceId ? byId.get(sourceId) : undefined;
-    if (!source) throw new Error(`Cannot reflect positional repetition pit ${targetId}`);
-    return [targetId, source[1], source[2]] as [string, number, number];
-  });
-  return JSON.stringify([currentPlayer, p0Score, p1Score, reflectedPits]);
-}
-
-function finishByPositionalRepetition(game: GameState, events: MoveEvent[]): void {
-  for (const pit of game.pits) {
-    if (pit.kind !== "dan" || pit.owner === null) continue;
-    game.scores[pit.owner] += pit.stones;
-    pit.stones = 0;
-  }
-  game.status = "finished";
-  game.winner = game.scores.P0 === game.scores.P1
-    ? null
-    : game.scores.P0 > game.scores.P1
-      ? "P0"
-      : "P1";
-  events.push({ type: "match_finished", winner: game.winner, reason: "repeated_position" });
 }
