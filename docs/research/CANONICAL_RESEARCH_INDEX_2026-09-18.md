@@ -5,7 +5,7 @@ The canonical research branch is `research/balanced-mode-tournament`.
 
 ## Canonical AI incumbent
 
-**PUCT V3A.1 material36** is the canonical Standard/classic 2-player research incumbent.
+**PUCT V3A.1 material36** is the validated Standard/classic 2-player research incumbent. Its incumbent status on the two forward-looking target modes — **Pie + Threefold** and **Quan Gia + Threefold** — is pending revalidation.
 
 Core implementation:
 - `src/research/puct-v3a.ts` — historical V3A core with the research leaf-score material gate.
@@ -47,6 +47,18 @@ Reusable code:
 - `.github/workflows/b3-resource-aware-selfplay.yml`
 
 Canonical finding: the B3 instability was traced to static-leaf heuristic horizon bias dominated by temporary `scoreDelta`; V3A.1 material36 repairs the validated move-2 and move-34 failures. Historical ResourceAware rescue evidence remains discovery evidence, not a promotion result.
+
+## Canonical forward research modes
+
+All future AI algorithm research/promotion simulations must use **both**:
+- `pie-threefold` — Pie/Swap + corrected Threefold;
+- `quan-gia-threefold` — Mature Quan (`mature_quan_v1`) + corrected Threefold.
+
+Standard remains historical/reference control only and must not be the sole
+promotion/rejection basis for future challengers.
+
+Existing V3A.1/V4/V5 strength verdicts were produced on Standard and therefore
+do **not** establish the same conclusions on these two target modes.
 
 ## Canonical balance evidence
 
@@ -107,5 +119,5 @@ PVS/NegaScout is historical only and excluded from active research/evaluation.
 - One-off diagnostic workflows and trace scripts are deleted after their conclusion is captured.
 - Closed challenger implementations are removed unless they are required for a canonical regression guard.
 - Fixed-simulation search is required for canonical same-family/balance comparisons.
-- New challengers must use V3A.1 material36 as the incumbent.
+- Until target-mode revalidation is complete, new challengers must compare against V3A.1 material36 as the provisional baseline on both Pie + Threefold and Quan Gia + Threefold.
 - Never silently change production rules or baseline semantics inside an algorithm comparison.
