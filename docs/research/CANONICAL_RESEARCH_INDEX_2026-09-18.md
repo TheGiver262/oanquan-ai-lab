@@ -11,9 +11,15 @@ Every future AI algorithm promotion/rejection study must evaluate **both**:
 
 Standard is a historical/reference control only and cannot be the sole future decision basis.
 
-## Provisional baseline
+## Current target-mode baselines
 
-**PUCT V3A.1 material36** is the validated Standard incumbent and the provisional baseline on both target modes pending dual-mode revalidation.
+Dual-mode revalidation is complete:
+
+- **Pie + Threefold:** use **V3A.1 material36** as the current baseline.
+- **Quan Gia + Threefold:** use **V3A** as the current baseline because V3A.1 showed repeatable unfavorable B3 pairs at both 10k and 20k.
+- **Standard:** V3A.1 material36 remains the historical validated incumbent.
+
+A future general challenger must be tested against the mode-appropriate baseline on both target modes.
 
 Retained implementation:
 - `src/research/puct-v3a.ts`
@@ -40,6 +46,7 @@ Current reusable benchmark:
 - `docs/research/BALANCE_CORE_MODES_PROTOCOL_2026-09-18.md` — current dual-mode protocol.
 - `docs/research/B3_PUCT_ROOT_CAUSE_AUDIT_2026-09-18.md` — causal origin of material36.
 - `docs/research/V3A1_MATERIAL36_PROMOTION_VERDICT_2026-09-18.md` — Standard-only V3A.1 promotion evidence.
+- `docs/research/V3A1_DUAL_MODE_REVALIDATION_2026-09-21.md` — dual-mode revalidation; Pie passes, Quan Gia regresses on B3:CW/B3:CCW.
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md` — Standard-only failed V4 family report.
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md` — Standard-only failed V5 family report.
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md` — rejected/superseded positional repetition report.
