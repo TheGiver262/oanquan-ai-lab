@@ -1,9 +1,9 @@
 {
   "name": "oanquan-ai-lab",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": false,
   "type": "module",
-  "description": "Lean Ô Ăn Quan AI research lab centered on V3A.1 and the Pie+Threefold / Quan Gia+Threefold target modes.",
+  "description": "Lean Ô Ăn Quan AI research lab centered on V3A.2 and the Pie+Threefold / Quan Gia+Threefold target modes.",
   "license": "MIT",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -16,7 +16,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "cli": "tsx src/cli.ts",
-    "benchmark:target-modes": "tsx src/benchmarks/target-mode-v3a1-selfplay.ts"
+    "benchmark:target-modes": "tsx src/benchmarks/target-mode-v3a2-selfplay.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

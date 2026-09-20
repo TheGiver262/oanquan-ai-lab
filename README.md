@@ -4,22 +4,25 @@ Lean research lab for **Ô Ăn Quan** AI. Production web/app code is intentional
 
 ## Current research target
 
-Future AI promotion research must run on **both** target modes:
+Every future AI promotion study must run on **both**:
+- `pie-threefold`
+- `quan-gia-threefold`
 
-- `pie-threefold` — Standard board rules + one-shot Pie/Swap + corrected Threefold.
-- `quan-gia-threefold` — Quan Gia (`mature_quan_v1`) + corrected Threefold.
+`standard` is historical/reference control only.
 
-`standard` remains a historical/reference control only. It is not sufficient by itself for future promotion or rejection.
+## Current incumbent
 
-## Current baseline
+**PUCT V3A.2 positive-only material36** is the canonical incumbent for both target modes.
 
-Dual-mode revalidation changed the baseline policy:
+V3A.2 keeps the V3A.1 high-material protection against temporary **positive** score leads, but no longer erases a legitimate **negative** score deficit when material >36.
 
-- **Pie + Threefold:** V3A.1 material36 remains acceptable against V3A.
-- **Quan Gia + Threefold:** V3A remains the safer baseline because V3A.1 reproduced two unfavorable B3 opening pairs at both 10k and 20k fixed simulations.
-- **Standard:** V3A.1 material36 remains the validated historical incumbent.
+Promotion evidence across 10k/20k/50k fixed simulations:
+- 120 games;
+- 60 completed opening pairs;
+- **0 unfavorable pairs**;
+- 0 unresolved games.
 
-A future general replacement must be non-regressive on both target modes.
+The previous Quan Gia regressions at `B3:CW` and `B3:CCW` are closed.
 
 PVS/NegaScout is excluded from active research.
 
@@ -39,44 +42,41 @@ npm run benchmark:target-modes -- --mode pie-threefold --fixed-simulations 10000
 npm run benchmark:target-modes -- --mode quan-gia-threefold --fixed-simulations 10000
 ```
 
-The benchmark uses the mode-aware **V3A.1 material36** adapter. Pie ownership is tracked by research-agent identity, so a SWAP changes seat ownership without mirroring or rewriting the board.
+The benchmark uses **V3A.2**. Pie ownership follows research-agent identity through SWAP.
 
 ## Production reference
 
-The frozen server-production reference remains pinned to:
+Frozen server-production reference:
 
 ```text
 TheGiver262/O_an_quan
 commit 73c698762c514d171869a79982fdc86103653e8f
 ```
 
-`tests/server-production-parity.test.ts` is retained as the production parity guard. Trạng Nguyên comparisons without the deployed learning snapshot remain `code-parity-no-live-learning-snapshot`.
+`tests/server-production-parity.test.ts` remains the production parity guard.
 
 ## Retained research evidence
-
-Authoritative documents:
 
 - `docs/research/CANONICAL_RESEARCH_INDEX_2026-09-18.md`
 - `docs/research/BALANCE_CORE_MODES_PROTOCOL_2026-09-18.md`
 - `docs/research/B3_PUCT_ROOT_CAUSE_AUDIT_2026-09-18.md`
 - `docs/research/V3A1_MATERIAL36_PROMOTION_VERDICT_2026-09-18.md`
 - `docs/research/V3A1_DUAL_MODE_REVALIDATION_2026-09-21.md`
+- `docs/research/V3A2_POSITIVE_ONLY_PROMOTION_2026-09-21.md`
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md`
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md`
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md`
 - `docs/research/HISTORICAL_RESEARCH_SUMMARY_2026-09-21.md`
 - `docs/r1a-production-parity-audit.md`
 
-Failed/superseded experiments keep their conclusions in reports only. Their implementations, dedicated tests, benchmarks and workflows are deliberately removed.
-
 ## Repository policy
 
-- Keep only reusable current code and correctness guards.
-- Keep one consolidated report for failed/superseded research.
-- Delete one-off benchmark scripts/workflows after conclusions are captured.
-- Do not commit benchmark outputs; `results/` stays empty except for `.gitkeep`.
+- Keep current reusable code and correctness guards only.
+- Closed/failed research keeps a consolidated report, not one-off code.
+- Delete one-off benchmark scripts/workflows/runs after consolidation.
+- `results/` stays empty except for `.gitkeep`.
 - `.github/workflows/ci.yml` is the only persistent workflow.
-- Every future algorithm promotion must be evaluated on both target modes.
+- Future promotion requires acceptable evidence on both target modes.
 - Unresolved games are censored, never heuristic-adjudicated.
 
 ## License

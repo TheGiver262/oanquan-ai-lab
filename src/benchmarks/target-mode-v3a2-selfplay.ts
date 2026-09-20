@@ -13,7 +13,7 @@ import {
   type BalanceState,
   type ResearchAgentId,
 } from "../research/balance-modes.js";
-import { ModeAwarePuctV3A1 } from "../research/mode-aware-puct-v3a1.js";
+import { ModeAwarePuctV3A2 } from "../research/mode-aware-puct-v3a2.js";
 
 type TargetMode = Extract<BalanceModeId, "pie-threefold" | "quan-gia-threefold">;
 
@@ -27,9 +27,9 @@ const policyTemperature = floatArg("--policy-temperature", 0.6);
 const outPath = stringArg("--out");
 
 let state = createBalanceInitialState(mode, openerAgent);
-const engines: Record<ResearchAgentId, ModeAwarePuctV3A1> = {
-  A: new ModeAwarePuctV3A1(),
-  B: new ModeAwarePuctV3A1(),
+const engines: Record<ResearchAgentId, ModeAwarePuctV3A2> = {
+  A: new ModeAwarePuctV3A2(),
+  B: new ModeAwarePuctV3A2(),
 };
 let finishReason: MatchFinishReason | null = null;
 let protocolDecisions = 0;
@@ -64,7 +64,7 @@ const openerSeat = seatForAgent(state, openerAgent);
 const responderSeat = seatForAgent(state, responderAgent);
 
 const result = {
-  experiment: "target-mode-v3a1-selfplay-v1",
+  experiment: "target-mode-v3a2-selfplay-v1",
   mode,
   ruleset: state.game.ruleset.canonicalRulesetId,
   config: {

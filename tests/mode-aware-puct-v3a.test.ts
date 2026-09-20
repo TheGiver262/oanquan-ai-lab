@@ -12,12 +12,13 @@ import {
   reflectBalanceStateForSearch,
 } from "../src/research/mode-aware-puct-v3a.js";
 import { ModeAwarePuctV3A1 } from "../src/research/mode-aware-puct-v3a1.js";
+import { ModeAwarePuctV3A2 } from "../src/research/mode-aware-puct-v3a2.js";
 
 describe("mode-aware PUCT target-mode guards", () => {
   it("returns legal fixed-simulation actions on both target modes", () => {
     for (const mode of ["pie-threefold", "quan-gia-threefold"] as const) {
       const state = createBalanceInitialState(mode);
-      const decision = new ModeAwarePuctV3A1().chooseAction(state, { simulations: 200 });
+      const decision = new ModeAwarePuctV3A2().chooseAction(state, { simulations: 200 });
       expect(decision.action).not.toBeNull();
       const legal = new Set(getBalanceActions(state).map(balanceActionKey));
       expect(decision.action && legal.has(balanceActionKey(decision.action))).toBe(true);
@@ -37,7 +38,7 @@ describe("mode-aware PUCT target-mode guards", () => {
     state = applied.state;
 
     expect(getBalanceActions(state).some((a) => a.kind === "swap")).toBe(true);
-    const decision = new ModeAwarePuctV3A1().chooseAction(state, { simulations: 200 });
+    const decision = new ModeAwarePuctV3A2().chooseAction(state, { simulations: 200 });
     expect(decision.action).not.toBeNull();
     expect(getBalanceActions(state).map(balanceActionKey)).toContain(
       decision.action ? balanceActionKey(decision.action) : "",
@@ -59,8 +60,9 @@ describe("mode-aware PUCT target-mode guards", () => {
     expect(reflectBalanceAction(reflectBalanceAction(action))).toEqual(action);
   });
 
-  it("keeps V3A and V3A.1 adapters independently constructible", () => {
+  it("keeps V3A, V3A.1 and V3A.2 adapters independently constructible", () => {
     expect(new ModeAwarePuctV3A()).toBeInstanceOf(ModeAwarePuctV3A);
     expect(new ModeAwarePuctV3A1()).toBeInstanceOf(ModeAwarePuctV3A1);
+    expect(new ModeAwarePuctV3A2()).toBeInstanceOf(ModeAwarePuctV3A2);
   });
 });
