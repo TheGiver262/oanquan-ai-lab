@@ -13,7 +13,13 @@ Future AI promotion research must run on **both** target modes:
 
 ## Current baseline
 
-**PUCT V3A.1 material36** is the validated Standard incumbent and the provisional baseline for the two target modes until dual-mode revalidation is complete.
+Dual-mode revalidation changed the baseline policy:
+
+- **Pie + Threefold:** V3A.1 material36 remains acceptable against V3A.
+- **Quan Gia + Threefold:** V3A remains the safer baseline because V3A.1 reproduced two unfavorable B3 opening pairs at both 10k and 20k fixed simulations.
+- **Standard:** V3A.1 material36 remains the validated historical incumbent.
+
+A future general replacement must be non-regressive on both target modes.
 
 PVS/NegaScout is excluded from active research.
 
@@ -54,6 +60,7 @@ Authoritative documents:
 - `docs/research/BALANCE_CORE_MODES_PROTOCOL_2026-09-18.md`
 - `docs/research/B3_PUCT_ROOT_CAUSE_AUDIT_2026-09-18.md`
 - `docs/research/V3A1_MATERIAL36_PROMOTION_VERDICT_2026-09-18.md`
+- `docs/research/V3A1_DUAL_MODE_REVALIDATION_2026-09-21.md`
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md`
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md`
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md`
