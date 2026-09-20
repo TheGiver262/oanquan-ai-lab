@@ -39,7 +39,15 @@ Mode id: `quan-gia-threefold`.
 
 ## Baseline
 
-V3A.1 material36 is the provisional baseline on both target modes until revalidation is completed. Its existing promotion verdict is Standard-only.
+Dual-mode revalidation is complete:
+
+- Pie + Threefold baseline: **V3A.1 material36**.
+- Quan Gia + Threefold baseline: **V3A**.
+- Standard historical incumbent: **V3A.1 material36**.
+
+The split exists because V3A.1 was neutral against V3A across all 10 paired Pie openings at both 10k and 20k, but produced repeatable unfavorable `B3:CW` and `B3:CCW` pairs under Quan Gia + Threefold at both budgets.
+
+A future general replacement must pass against the appropriate baseline on both target modes.
 
 ## Cleanup rule
 
