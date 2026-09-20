@@ -1,5 +1,14 @@
 # PUCT V5 transposition-graph family closure — 2026-09-19
 
+## Scope correction — 2026-09-21
+
+This closure verdict is supported by **Standard/classic** simulations only.
+It must not be generalized to **Pie + Threefold** or **Quan Gia + Threefold**
+without rerunning the family under those exact mode semantics.
+
+V5-A/V5-B remain closed for Standard; the retained-graph family is
+**unverified** on the two forward research modes.
+
 ## Verdict
 
 **REJECT / CLOSE V5-A and V5-B. PUCT V3A.1 material36 remains the canonical research incumbent.**
