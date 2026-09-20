@@ -1,5 +1,14 @@
 # PUCT V3A.1 material36 promotion verdict — 2026-09-18
 
+## Scope correction — 2026-09-21
+
+This promotion verdict is **Standard-only evidence**. It does not establish
+V3A.1 as the strongest incumbent on the forward research modes
+**Pie + Threefold** or **Quan Gia + Threefold**.
+
+From 2026-09-21 onward, those two modes are the mandatory algorithm-evaluation
+targets. V3A.1 is only the **provisional baseline** there until revalidated.
+
 ## Verdict
 
 **PROMOTE — canonical research incumbent.**
