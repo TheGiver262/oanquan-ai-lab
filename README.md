@@ -99,12 +99,13 @@ Every tournament alternates the research AI between P0 and P1.
 
 ## Current research status
 
-- **PUCT V3A.1 material36** is the current validated research incumbent.
-- V3A.1 fixes the validated V3A early/midgame score-horizon bias while remaining non-regressive against V3A across the promoted 10k/20k/50k fixed-simulation corpus.
-- V4/V4B/V4C selective one-ply quiescence is closed and rejected after reproducing the same reflection-consistent LQ@6 regression.
-- V5-A/V5-B retained transposition-graph search is also closed: no strength gain across 10k/20k/50k, ~24–28% timing overhead, and V5-B hit a ~6 GB heap OOM on one 100k target.
+- **PUCT V3A.1 material36** is the validated **Standard** incumbent; target-mode incumbent status is pending revalidation.
+- All future AI research/promotion simulations must run on **both** `pie-threefold` and `quan-gia-threefold`.
+- Standard remains a historical/reference control and must not be the sole basis for future promotion or rejection.
+- V3A.1 fixes the validated Standard V3A early/midgame score-horizon bias while remaining non-regressive across the Standard 10k/20k/50k corpus.
+- V4/V4B/V4C and V5-A/V5-B closure results remain valid for **Standard only**; they are unverified on Pie + Threefold and Quan Gia + Threefold.
 - PVS/NegaScout is historical only and excluded from active evaluation.
-- The active baseline for future challengers is V3A.1. Do not continue the closed one-ply bootstrap or retained full-graph families without a new causal/architectural mechanism.
+- Until dual-mode revalidation is complete, V3A.1 is the provisional baseline for new challengers on both target modes.
 - Balance/B3 evidence remains available as canonical audit and validation documents.
 
 See `docs/research/CANONICAL_RESEARCH_INDEX_2026-09-18.md` for the authoritative list of current evidence and reproducible workflows.
@@ -178,10 +179,11 @@ Committed benchmark outputs are intentionally not kept in `results/`. Temporary 
 
 1. Pin every production reference to a source commit.
 2. Pass parity tests before interpreting tournament results.
-3. Alternate P0/P1 evenly.
-4. Give compared algorithms explicit, reported time/node budgets.
-5. Report unresolved games instead of silently scoring them as draws.
-6. Never label a Trạng Nguyên comparison “full live strength” without the deployed learning snapshot when learning is enabled.
+3. Run every future algorithm promotion study on both Pie + Threefold and Quan Gia + Threefold; Standard alone is insufficient.
+4. Alternate P0/P1 or research-agent ownership appropriately for the mode, preserving Pie/Swap semantics exactly.
+5. Give compared algorithms explicit, reported time/node budgets.
+6. Report unresolved games instead of silently scoring them as draws.
+7. Never label a Trạng Nguyên comparison “full live strength” without the deployed learning snapshot when learning is enabled.
 
 ## License
 
