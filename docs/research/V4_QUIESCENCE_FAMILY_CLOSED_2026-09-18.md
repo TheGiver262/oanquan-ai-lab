@@ -1,5 +1,14 @@
 # PUCT V4 selective-quiescence family closure — 2026-09-18
 
+## Scope correction — 2026-09-21
+
+This closure verdict is supported by **Standard/classic** simulations only.
+It must not be generalized to **Pie + Threefold** or **Quan Gia + Threefold**
+without rerunning the family under those exact mode semantics.
+
+The V4 family remains closed for Standard; it is **unverified** on the two
+forward research modes.
+
 ## Verdict
 
 **CLOSE / REJECT the selective one-ply quiescence family tested in V4, V4B and V4C.**
