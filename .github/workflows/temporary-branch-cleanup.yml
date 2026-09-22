@@ -1,0 +1,17 @@
+name: temporary-branch-cleanup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Delete temporary research branch
+        run: git push origin --delete research/v3a2-qg-causal-audit
