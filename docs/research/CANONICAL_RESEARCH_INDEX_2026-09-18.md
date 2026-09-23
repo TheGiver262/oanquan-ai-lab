@@ -1,6 +1,6 @@
 # Canonical Research Index — 2026-09-21
 
-The canonical branches are `main` and `research/balanced-mode-tournament`; they are kept synchronized after research promotion/cleanup.
+The canonical branch is `main`. Temporary research branches are disposable and must not be treated as canonical after evidence is consolidated.
 
 ## Forward evaluation protocol
 
@@ -61,6 +61,8 @@ Current reusable benchmark:
 - `docs/research/V3A1_MATERIAL36_PROMOTION_VERDICT_2026-09-18.md` — Standard-only V3A.1 evidence.
 - `docs/research/V3A1_DUAL_MODE_REVALIDATION_2026-09-21.md` — identified V3A.1 Quan Gia regression.
 - `docs/research/V3A2_POSITIVE_ONLY_PROMOTION_2026-09-21.md` — causal fix and dual-mode promotion.
+- `docs/research/V3A2_TARGET_MODE_BALANCE_AUDIT_2026-09-22.md` — 10k rule-balance audit comparing Pie + Threefold vs Quan Gia + Threefold under frozen V3A.2.
+- `docs/research/V3A3_BOUNDED_SOLVED_TT_REJECTION_2026-09-22.md` — rejected bounded exact-solved TT challenger; V3A.2 retained.
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md` — Standard-only failed V4 family.
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md` — Standard-only failed V5 family.
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md` — rejected positional repetition variant.
@@ -73,6 +75,7 @@ Current reusable benchmark:
 - Fixed-threshold retuning for the V3A.1 Quan Gia regression: rejected; thresholds 18/24/30/36/42 regressed elsewhere and 48 effectively returned toward V3A in the forced-opening suite.
 - V4 one-ply family: closed for Standard.
 - V5 retained transposition graph family: closed for Standard.
+- V3A.3 bounded exact-solved TT: closed after the 10k Quan Gia gate produced four unfavorable opening pairs.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
