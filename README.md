@@ -15,19 +15,18 @@ have equal veto power over promotion decisions.
 
 ## Current incumbent
 
-**PUCT V3A.2 positive-only material36** is the canonical incumbent for both target modes.
+**Primary mode — Quan Gia + Threefold:** **PUCT V3B.1 PNSum Cpn=2.0**.
 
-V3A.2 keeps the V3A.1 high-material protection against temporary **positive** score leads, but no longer erases a legitimate **negative** score deficit when material >36.
+Primary promotion evidence vs V3A.2:
+- 5k: 6 favorable / 4 neutral / **0 unfavorable** pairs;
+- 10k: 4 favorable / 6 neutral / **0 unfavorable** pairs;
+- 20k: 4 favorable / 6 neutral / **0 unfavorable** pairs;
+- 50k: 2 favorable / 8 neutral / **0 unfavorable** pairs;
+- no unresolved games in the promoted Cpn=2.0 primary gates.
 
-Promotion evidence across 10k/20k/50k fixed simulations:
-- 120 games;
-- 60 completed opening pairs;
-- **0 unfavorable pairs**;
-- 0 unresolved games.
+**Reference modes — Pie + Threefold / Standard:** retain **V3A.2 positive-only material36** as the comparison baseline. V3B.1 regressed on these reference modes and is not claimed as a universal replacement.
 
-The previous Quan Gia regressions at `B3:CW` and `B3:CCW` are closed.
-
-PVS/NegaScout is excluded from active research.
+PVS/NegaScout remains excluded from active research.
 
 ## Setup
 
@@ -38,14 +37,22 @@ npm test
 npm run build
 ```
 
-## Canonical target-mode benchmark
+## Canonical benchmarks
+
+Primary Quan Gia incumbent vs V3A.2:
+
+```bash
+npm run benchmark:primary -- --fixed-simulations 10000
+```
+
+V3A.2 reference benchmark:
 
 ```bash
 npm run benchmark:target-modes -- --mode pie-threefold --fixed-simulations 10000
 npm run benchmark:target-modes -- --mode quan-gia-threefold --fixed-simulations 10000
 ```
 
-The benchmark uses **V3A.2**. Pie ownership follows research-agent identity through SWAP.
+Pie ownership follows research-agent identity through SWAP.
 
 ## Production reference
 
@@ -71,6 +78,7 @@ commit 73c698762c514d171869a79982fdc86103653e8f
 - `docs/research/V3A4_IMPLICIT_MINIMAX_REJECTION_2026-09-23.md`
 - `docs/research/V3A5_VISIT_DECAYED_IMPLICIT_MINIMAX_REJECTION_2026-09-24.md`
 - `docs/research/V3B_PNMAX_REJECTION_2026-09-24.md`
+- `docs/research/V3B1_PNSUM_PROMOTION_2026-09-24.md`
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md`
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md`
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md`
