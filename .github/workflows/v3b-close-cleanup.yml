@@ -1,0 +1,49 @@
+name: temporary-v3b-close-cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/v3b-close-cleanup.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Delete closed V3B research branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/research/v3b-proof-number-guidance" || true
+
+      - name: Prune completed workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          IDS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100"             --jq ".workflow_runs[] | select(.status==\"completed\" and (.id|tostring) != \"$CURRENT_RUN\") | .id")"
+          for id in $IDS; do
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" || true
+          done
+
+      - name: Remove temporary cleanup workflow
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/v3b-close-cleanup.yml
+          git commit -m "chore: remove temporary V3B cleanup workflow"
+          git push origin HEAD:main
