@@ -92,6 +92,7 @@ Current reusable benchmarks:
 - V3A.4 fixed implicit minimax: closed after a clean Pie 10k gate but four unfavorable Quan Gia opening pairs at 10k.
 - V3A.5 visit-decayed implicit minimax: closed after H=128 regressed on six Quan Gia opening pairs at 10k.
 - V3B PNMax proof-number guidance: closed after every preregistered coefficient produced Quan Gia regressions at 5k.
+- V3B.2 Score-Bounded PNSum: closed after a non-regressive but zero-signal Quan Gia 5k gate; no 10k escalation.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
