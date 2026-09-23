@@ -17,24 +17,26 @@ cross-mode correctness or stability regression must still be reported.
 
 ## Current incumbent
 
-**PUCT V3A.2 positive-only material36** is the canonical baseline for both target modes.
+### Primary: Quan Gia + Threefold
 
-Mechanism:
-- material <=36: scoreDelta weight 1.8;
-- material >36 with positive scoreDelta: suppress scoreDelta;
-- material >36 with zero/negative scoreDelta: retain scoreDelta weight 1.8.
+**PUCT V3B.1 PNSum Cpn=2.0** is the canonical primary-mode incumbent.
 
-Promotion evidence:
-- 10k, 20k and 50k fixed-simulation all-opening paired gates;
-- 120 games total;
-- 60 completed pairs;
-- 0 unfavorable pairs;
-- 0 unresolved games.
+Promotion evidence vs V3A.2:
+- 5k: 6 favorable / 4 neutral / 0 unfavorable / 0 unresolved pairs;
+- 10k: 4 / 6 / 0 / 0;
+- 20k: 4 / 6 / 0 / 0;
+- 50k: 2 / 8 / 0 / 0.
 
-The full causal and promotion record is:
-- `docs/research/V3A2_POSITIVE_ONLY_PROMOTION_2026-09-21.md`
+Final 50k aggregate: **12W-0D-8L**, with `B3:CW` and `B3:CCW` favorable and all other opening pairs neutral.
 
-Standard historical incumbent remains V3A.1 material36; no new Standard promotion is claimed.
+Canonical record:
+- `docs/research/V3B1_PNSUM_PROMOTION_2026-09-24.md`
+
+### Reference modes
+
+**V3A.2 positive-only material36** remains the Pie + Threefold / general comparison baseline because V3B.1 regressed on Pie and Standard at the 10k reference check.
+
+Standard's older historical V3A.1 evidence remains historical; no V3B.1 Standard promotion is claimed.
 
 ## Retained implementation
 
@@ -43,6 +45,7 @@ Standard historical incumbent remains V3A.1 material36; no new Standard promotio
 - `src/research/mode-aware-puct-v3a.ts`
 - `src/research/mode-aware-puct-v3a1.ts`
 - `src/research/mode-aware-puct-v3a2.ts`
+- `src/research/mode-aware-puct-v3b1.ts`
 - `src/research/balance-modes.ts`
 
 ## Retained correctness guards
@@ -52,12 +55,14 @@ Standard historical incumbent remains V3A.1 material36; no new Standard promotio
 - `tests/puct-v3a.test.ts`
 - `tests/puct-v3a1.test.ts`
 - `tests/mode-aware-puct-v3a.test.ts`
+- `tests/mode-aware-puct-v3b1.test.ts`
 - `tests/balance-modes.test.ts`
 - `tests/quan-gia-threefold.test.ts`
 - `tests/server-production-parity.test.ts`
 
-Current reusable benchmark:
-- `src/benchmarks/target-mode-v3a2-selfplay.ts`
+Current reusable benchmarks:
+- `src/benchmarks/v3b1-pnsum-screen.ts` — primary Quan Gia incumbent vs V3A.2.
+- `src/benchmarks/target-mode-v3a2-selfplay.ts` — V3A.2 reference benchmark.
 
 ## Retained evidence
 
