@@ -8,7 +8,7 @@ import { V3A1_LEAF_SCORE_MATERIAL_MAX } from "./puct-v3a1.js";
 
 export type ModeAwarePuctV3A2Options = Omit<
   ModeAwarePuctV3AOptions,
-  "leafScoreMaterialMax" | "leafScoreHighMaterialGate"
+  "leafScoreMaterialMax" | "leafScoreHighMaterialGate" | "proofNumberBiasCoefficient"
 >;
 
 /**
@@ -27,6 +27,7 @@ export class ModeAwarePuctV3A2 extends ModeAwarePuctV3A {
       ...options,
       leafScoreMaterialMax: V3A1_LEAF_SCORE_MATERIAL_MAX,
       leafScoreHighMaterialGate: "positive_only",
+      proofNumberBiasCoefficient: 0,
     });
   }
 }
