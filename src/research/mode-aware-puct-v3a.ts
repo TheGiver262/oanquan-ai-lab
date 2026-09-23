@@ -18,6 +18,11 @@ export type ModeAwarePuctV3AOptions = {
   puctExploration?: number;
   policyTemperature?: number;
   /**
+   * Research-only proof-number selection coefficient. Zero preserves incumbent
+   * PUCT selection exactly.
+   */
+  proofNumberBiasCoefficient?: number;
+  /**
    * Diagnostics-only. Records how leaf rewards contributing to each root child
    * were produced. This must not alter selection, expansion, backup or ranking.
    */
@@ -130,6 +135,7 @@ type Node = {
   children: Node[];
   visits: number;
   valueSum: number;
+  proofNumbers: Record<ResearchAgentId, number>;
   prior: number;
   expanded: boolean;
   solvedOutcome: SolvedOutcome;
@@ -164,6 +170,7 @@ type MutableRootLeafAudit = {
 const DEFAULT_SIMULATIONS = 100_000;
 const DEFAULT_PUCT_EXPLORATION = 1.5;
 const DEFAULT_POLICY_TEMPERATURE = 0.6;
+const DEFAULT_PROOF_NUMBER_BIAS_COEFFICIENT = 0;
 const DEFAULT_LEAF_SCORE_WEIGHT = 1.8;
 const DEFAULT_LEAF_BOOTSTRAP: "static" | "one_ply" = "static";
 const DEFAULT_HIGH_MATERIAL_GATE: "symmetric" | "positive_only" = "symmetric";
@@ -241,12 +248,17 @@ export class ModeAwarePuctV3A {
     const deadline = started + (options.timeBudgetMs ?? Number.POSITIVE_INFINITY);
     const exploration = options.puctExploration ?? DEFAULT_PUCT_EXPLORATION;
     const policyTemperature = options.policyTemperature ?? DEFAULT_POLICY_TEMPERATURE;
+    const proofNumberBiasCoefficient = options.proofNumberBiasCoefficient
+      ?? DEFAULT_PROOF_NUMBER_BIAS_COEFFICIENT;
     const leafScoreWeight = options.leafScoreWeight ?? DEFAULT_LEAF_SCORE_WEIGHT;
     const leafBootstrap = options.leafBootstrap ?? DEFAULT_LEAF_BOOTSTRAP;
     const leafScoreMaterialMax = options.leafScoreMaterialMax ?? Number.POSITIVE_INFINITY;
     const leafScoreHighMaterialGate = options.leafScoreHighMaterialGate ?? DEFAULT_HIGH_MATERIAL_GATE;
     if (!(exploration > 0)) throw new Error("puctExploration must be > 0");
     if (!(policyTemperature > 0)) throw new Error("policyTemperature must be > 0");
+    if (!Number.isFinite(proofNumberBiasCoefficient) || proofNumberBiasCoefficient < 0) {
+      throw new Error("proofNumberBiasCoefficient must be a finite non-negative number");
+    }
     if (!Number.isFinite(leafScoreWeight) || leafScoreWeight < 0) {
       throw new Error("leafScoreWeight must be a finite non-negative number");
     }
@@ -278,7 +290,7 @@ export class ModeAwarePuctV3A {
         && node.expanded
         && node.children.length > 0
       ) {
-        const child = this.selectChild(node, exploration);
+        const child = this.selectChild(node, exploration, proofNumberBiasCoefficient);
         path.push(child);
         if (pathKeys.has(child.key)) {
           node = child;
@@ -355,11 +367,11 @@ export class ModeAwarePuctV3A {
         cursor.valueSum += reward;
       }
 
-      if (!cycleLeaf) {
-        for (let index = path.length - 1; index >= 0; index -= 1) {
-          const cursor = path[index];
-          if (cursor) this.updateSolvedOutcome(cursor);
-        }
+      for (let index = path.length - 1; index >= 0; index -= 1) {
+        const cursor = path[index];
+        if (!cursor) continue;
+        if (!cycleLeaf) this.updateSolvedOutcome(cursor);
+        this.updateProofNumbers(cursor);
       }
       simulations += 1;
     }
@@ -440,10 +452,15 @@ export class ModeAwarePuctV3A {
 
     node.expanded = true;
     this.updateSolvedOutcome(node);
+    this.updateProofNumbers(node);
     return node.children.length;
   }
 
-  private selectChild(node: Node, exploration: number): Node {
+  private selectChild(
+    node: Node,
+    exploration: number,
+    proofNumberBiasCoefficient: number,
+  ): Node {
     const maximizing = currentAgent(node.state) === this.engineAgent;
     const parentVisits = Math.max(1, node.visits);
     const useful = node.children.filter((child) => maximizing ? child.solvedOutcome !== -1 : child.solvedOutcome !== 1);
@@ -452,10 +469,17 @@ export class ModeAwarePuctV3A {
     let best = candidates[0];
     let bestScore = Number.NEGATIVE_INFINITY;
     const sign = maximizing ? 1 : -1;
-    for (const child of candidates) {
+    const actingAgent = currentAgent(node.state);
+    const proofBiases = proofNumberSumBiases(
+      candidates.map((child) => child.proofNumbers[actingAgent]),
+    );
+    for (let index = 0; index < candidates.length; index += 1) {
+      const child = candidates[index];
+      if (!child) continue;
       const mean = child.visits > 0 ? child.valueSum / child.visits : 0;
       const explorationTerm = exploration * child.prior * Math.sqrt(parentVisits) / (1 + child.visits);
-      const score = sign * mean + explorationTerm;
+      const proofTerm = proofNumberBiasCoefficient * (proofBiases[index] ?? 0);
+      const score = sign * mean + explorationTerm + proofTerm;
       if (score > bestScore) {
         bestScore = score;
         best = child;
@@ -491,6 +515,37 @@ export class ModeAwarePuctV3A {
     }
     if (node.children.every((child) => child.solvedOutcome !== null)) {
       node.solvedOutcome = node.children.some((child) => child.solvedOutcome === 0) ? 0 : 1;
+    }
+  }
+
+  private updateProofNumbers(node: Node): void {
+    if (node.state.game.status === "finished") {
+      node.proofNumbers = terminalProofNumbers(node.state);
+      return;
+    }
+    if (!node.expanded || node.children.length === 0) {
+      node.proofNumbers = { A: 1, B: 1 };
+      return;
+    }
+
+    const mover = currentAgent(node.state);
+    for (const agent of ["A", "B"] as const) {
+      if (agent === mover) {
+        node.proofNumbers[agent] = Math.min(
+          ...node.children.map((child) => child.proofNumbers[agent]),
+        );
+      } else {
+        let sum = 0;
+        for (const child of node.children) {
+          const value = child.proofNumbers[agent];
+          if (!Number.isFinite(value)) {
+            sum = Number.POSITIVE_INFINITY;
+            break;
+          }
+          sum += value;
+        }
+        node.proofNumbers[agent] = sum;
+      }
     }
   }
 
@@ -704,6 +759,7 @@ function makeNode(
     children: [],
     visits: 0,
     valueSum: 0,
+    proofNumbers: initialProofNumbers(state),
     prior,
     expanded: false,
     solvedOutcome: state.game.status === "finished" ? terminalAgentOutcome(state, engineAgent) : null,
@@ -735,6 +791,38 @@ function countLookupWindowNodes(root: Node): number {
     frontier = next;
   }
   return count;
+}
+
+function initialProofNumbers(state: BalanceState): Record<ResearchAgentId, number> {
+  return state.game.status === "finished"
+    ? terminalProofNumbers(state)
+    : { A: 1, B: 1 };
+}
+
+function terminalProofNumbers(state: BalanceState): Record<ResearchAgentId, number> {
+  const winner = winnerAgent(state);
+  if (winner === "A") return { A: 0, B: Number.POSITIVE_INFINITY };
+  if (winner === "B") return { A: Number.POSITIVE_INFINITY, B: 0 };
+  return { A: Number.POSITIVE_INFINITY, B: Number.POSITIVE_INFINITY };
+}
+
+export function proofNumberSumBiases(proofNumbers: number[]): number[] {
+  let finiteSum = 0;
+  let finiteCount = 0;
+  for (const value of proofNumbers) {
+    if (!Number.isFinite(value)) continue;
+    if (value < 0) throw new Error("proof numbers must be non-negative");
+    finiteSum += value;
+    finiteCount += 1;
+  }
+  if (finiteCount === 0) return proofNumbers.map(() => 0);
+
+  const denominator = 1 + finiteSum;
+  return proofNumbers.map((value) =>
+    Number.isFinite(value)
+      ? 1 - value / denominator
+      : 0,
+  );
 }
 
 function strategicBalanceStateKey(state: BalanceState): string {
