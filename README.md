@@ -4,11 +4,14 @@ Lean research lab for **Ô Ăn Quan** AI. Production web/app code is intentional
 
 ## Current research target
 
-Every future AI promotion study must run on **both**:
-- `pie-threefold`
-- `quan-gia-threefold`
+Canonical evaluation modes:
+- **Primary:** `quan-gia-threefold`
+- **Reference:** `pie-threefold`
+- **Reference:** `standard`
 
-`standard` is historical/reference control only.
+Future AI research is optimized and judged primarily on **Quan Gia + Threefold**.
+Pie + Threefold and Standard remain comparison/reference modes and no longer
+have equal veto power over promotion decisions.
 
 ## Current incumbent
 
@@ -79,7 +82,7 @@ commit 73c698762c514d171869a79982fdc86103653e8f
 - Delete one-off benchmark scripts/workflows/runs after consolidation.
 - `results/` stays empty except for `.gitkeep`.
 - `.github/workflows/ci.yml` is the only persistent workflow.
-- Future promotion requires acceptable evidence on both target modes.
+- Future promotion is decided primarily on `quan-gia-threefold`; `pie-threefold` and `standard` are secondary reference checks.
 - Unresolved games are censored, never heuristic-adjudicated.
 
 ## License
