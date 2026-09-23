@@ -4,11 +4,16 @@ The canonical branch is `main`. Temporary research branches are disposable and m
 
 ## Forward evaluation protocol
 
-Every future AI algorithm promotion/rejection study must evaluate both:
-1. `pie-threefold`
-2. `quan-gia-threefold`
+Canonical mode priority:
+1. **Primary:** `quan-gia-threefold`
+2. **Reference:** `pie-threefold`
+3. **Reference:** `standard`
 
-Standard is historical/reference control only.
+Future AI promotion/rejection decisions are driven primarily by Quan Gia +
+Threefold. Pie + Threefold and Standard are retained as secondary comparison
+modes, but a regression there alone does not automatically veto a challenger
+that is clearly stronger and stable on the primary mode. Any severe
+cross-mode correctness or stability regression must still be reported.
 
 ## Current incumbent
 
