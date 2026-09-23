@@ -1,10 +1,18 @@
 # Core AI evaluation protocol — 2026-09-21
 
-## Mandatory target modes
+## Canonical mode priority
 
-All future AI research, self-play, tournaments and promotion gates must run on both:
+### Primary: Quan Gia + Threefold
 
-### Pie + Threefold
+Mode id: `quan-gia-threefold`.
+
+- Rule profile: `mature_quan_v1`.
+- A live Quan can be captured only when its Quan pit contains at least 5 dân.
+- No Pie/Swap.
+- Uses corrected Threefold semantics.
+- This is the **main optimization, self-play and promotion mode**.
+
+### Reference: Pie + Threefold
 
 Mode id: `pie-threefold`.
 
@@ -13,19 +21,14 @@ Mode id: `pie-threefold`.
 - After move 1, the original responder has one KEEP/SWAP decision.
 - SWAP changes agent-to-seat ownership only.
 - Corrected Threefold uses repeated move-pair `ABABAB` semantics.
+- Retained as a secondary comparison mode, not an equal promotion gate.
 
-### Quan Gia + Threefold
+### Reference: Standard
 
-Mode id: `quan-gia-threefold`.
+Mode id: `standard`.
 
-- Rule profile: `mature_quan_v1`.
-- A live Quan can be captured only when its Quan pit contains at least 5 dân.
-- No Pie/Swap.
-- Uses corrected Threefold semantics.
-
-## Standard
-
-Standard is historical/reference control only and cannot be the sole basis for future promotion/rejection.
+- Retained as the historical/basic-rules reference mode.
+- Used for compatibility and behavior comparison, not as the primary optimization target.
 
 ## Current baseline
 
@@ -43,9 +46,13 @@ V3A.2 closed that regression while remaining non-regressive against V3A.1 on Pie
 - Freeze c_puct, policy temperature, priors and rule semantics unless explicitly isolated.
 - Pair ownership/seats appropriately; Pie must follow research-agent identity through SWAP.
 - Report unresolved games separately; never heuristic-adjudicate them.
-- A general replacement must pass on both target modes.
-- New challengers compare against **V3A.2** on both target modes.
-- Standard-only evidence is diagnostic/historical for future work.
+- New challengers compare primarily against **V3A.2** on `quan-gia-threefold`.
+- Pie + Threefold and Standard are secondary reference checks.
+- A Pie/Standard regression alone does not automatically veto promotion if the
+  challenger is clearly stronger and stable on Quan Gia + Threefold.
+- Severe correctness, illegal-move, instability or catastrophic cross-mode
+  regressions still block promotion regardless of mode priority.
+- Standard-only or Pie-only evidence cannot justify promotion.
 
 ## Cleanup rule
 
