@@ -70,6 +70,7 @@ Current reusable benchmark:
 - `docs/research/V3A3_BOUNDED_SOLVED_TT_REJECTION_2026-09-22.md` — rejected bounded exact-solved TT challenger; V3A.2 retained.
 - `docs/research/V3A4_IMPLICIT_MINIMAX_REJECTION_2026-09-23.md` — fixed-weight implicit-minimax challenger rejected after four unfavorable Quan Gia opening pairs at 10k.
 - `docs/research/V3A5_VISIT_DECAYED_IMPLICIT_MINIMAX_REJECTION_2026-09-24.md` — visit-decayed implicit-minimax challenger rejected after six unfavorable Quan Gia opening pairs at 10k.
+- `docs/research/V3B_PNMAX_REJECTION_2026-09-24.md` — PNMax proof-number guidance rejected at the Quan Gia 5k screen; Cpn=0.1 retained two repeatable unfavorable pairs.
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md` — Standard-only failed V4 family.
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md` — Standard-only failed V5 family.
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md` — rejected positional repetition variant.
@@ -85,6 +86,7 @@ Current reusable benchmark:
 - V3A.3 bounded exact-solved TT: closed after the 10k Quan Gia gate produced four unfavorable opening pairs.
 - V3A.4 fixed implicit minimax: closed after a clean Pie 10k gate but four unfavorable Quan Gia opening pairs at 10k.
 - V3A.5 visit-decayed implicit minimax: closed after H=128 regressed on six Quan Gia opening pairs at 10k.
+- V3B PNMax proof-number guidance: closed after every preregistered coefficient produced Quan Gia regressions at 5k.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
