@@ -63,6 +63,7 @@ Current reusable benchmark:
 - `docs/research/V3A2_POSITIVE_ONLY_PROMOTION_2026-09-21.md` — causal fix and dual-mode promotion.
 - `docs/research/V3A2_TARGET_MODE_BALANCE_AUDIT_2026-09-22.md` — 10k rule-balance audit comparing Pie + Threefold vs Quan Gia + Threefold under frozen V3A.2.
 - `docs/research/V3A3_BOUNDED_SOLVED_TT_REJECTION_2026-09-22.md` — rejected bounded exact-solved TT challenger; V3A.2 retained.
+- `docs/research/V3A4_IMPLICIT_MINIMAX_REJECTION_2026-09-23.md` — fixed-weight implicit-minimax challenger rejected after four unfavorable Quan Gia opening pairs at 10k.
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md` — Standard-only failed V4 family.
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md` — Standard-only failed V5 family.
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md` — rejected positional repetition variant.
@@ -76,6 +77,7 @@ Current reusable benchmark:
 - V4 one-ply family: closed for Standard.
 - V5 retained transposition graph family: closed for Standard.
 - V3A.3 bounded exact-solved TT: closed after the 10k Quan Gia gate produced four unfavorable opening pairs.
+- V3A.4 fixed implicit minimax: closed after a clean Pie 10k gate but four unfavorable Quan Gia opening pairs at 10k.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
