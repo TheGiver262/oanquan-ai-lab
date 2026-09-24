@@ -95,6 +95,7 @@ Current reusable benchmarks:
 - V3B.2 Score-Bounded PNSum: closed after a non-regressive but zero-signal Quan Gia 5k gate; no 10k escalation.
 - V3B.3 mobility proof initialization: closed after four Quan Gia 5k regressions, all reproduced in targeted confirmation.
 - V3B.4 PNRank: closed after all preregistered coefficients regressed at Quan Gia 5k; proof-number bias-formula/Cpn tuning is closed for now.
+- V3C root alpha-beta verifier: closed after 2W-0D-18L at Quan Gia 5k with 8 unfavorable pairs; shallow heuristic post-search override is not retained.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
