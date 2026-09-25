@@ -1,0 +1,30 @@
+name: remove-obsolete-v3d-branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/remove-obsolete-v3d-branch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Delete obsolete branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/research/v3d-exact-endgame-solver" || true
+      - name: Remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/remove-obsolete-v3d-branch.yml
+          git commit -m "chore: remove obsolete V3D cleanup workflow"
+          git push origin HEAD:main
