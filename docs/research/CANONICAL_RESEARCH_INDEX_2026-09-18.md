@@ -97,6 +97,7 @@ Current reusable benchmarks:
 - V3B.4 PNRank: closed after all preregistered coefficients regressed at Quan Gia 5k; proof-number bias-formula/Cpn tuning is closed for now.
 - V3C root alpha-beta verifier: closed after 2W-0D-18L at Quan Gia 5k with 8 unfavorable pairs; shallow heuristic post-search override is not retained.
 - V3D exact endgame frontier solver: operationally closed before 5k; material<=12 is not a tractable exact-solve region under the registered online solver architecture.
+- V3E material-bounded tablebase: closed; refill makes raw-material sublevel sets non-closed under legal transitions, so no PUCT integration was attempted.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
