@@ -99,6 +99,7 @@ Current reusable benchmarks:
 - V3D exact endgame frontier solver: operationally closed before 5k; material<=12 is not a tractable exact-solve region under the registered online solver architecture.
 - V3E material-bounded tablebase: closed; refill makes raw-material sublevel sets non-closed under legal transitions, so no PUCT integration was attempted.
 - V3F Progressive History: closed after all preregistered W values produced zero favorable and two unfavorable Quan Gia pairs at 5k; targeted regressions reproduced.
+- V3G visit-adaptive PUCT: closed after a non-regressive but fully neutral Quan Gia 5k gate; no 10k escalation.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
