@@ -1,0 +1,53 @@
+name: temporary-v3f-final-cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/v3f-final-cleanup.yml"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Cancel leftover V3F research runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IDS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=research%2Fv3f-progressive-history&per_page=100"             --jq '.workflow_runs[] | select(.status=="queued" or .status=="in_progress") | .id')"
+          for id in $IDS; do
+            gh api --method POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/cancel" || true
+          done
+
+      - name: Delete V3F research branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/research/v3f-progressive-history" || true
+
+      - name: Prune completed research runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN: ${{ github.run_id }}
+        run: |
+          IDS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=research%2Fv3f-progressive-history&per_page=100"             --jq '.workflow_runs[] | select(.status=="completed") | .id')"
+          for id in $IDS; do
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" || true
+          done
+
+      - name: Remove temporary cleanup workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/v3f-final-cleanup.yml
+          git commit -m "chore: remove temporary V3F cleanup workflow"
+          git push origin HEAD:main
