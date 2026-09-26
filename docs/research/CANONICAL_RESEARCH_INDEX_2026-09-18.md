@@ -101,6 +101,7 @@ Current reusable benchmarks:
 - V3F Progressive History: closed after all preregistered W values produced zero favorable and two unfavorable Quan Gia pairs at 5k; targeted regressions reproduced.
 - V3G visit-adaptive PUCT: closed after a non-regressive but fully neutral Quan Gia 5k gate; no 10k escalation.
 - V3H local RAVE/AMAF: closed after every preregistered k produced unfavorable Quan Gia pairs; common B2:CCW regression reproduced for k=100/500/1000.
+- V3I First Play Urgency: closed after r=0.1/0.3 reproduced B2:CCW regressions and r=0.5 produced 10/10 neutral pairs with no gain.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
