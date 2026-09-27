@@ -1,0 +1,33 @@
+name: temporary-v3k-close-cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/v3k-close-cleanup.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Delete closed V3K branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/research/v3k-target-mode-one-ply" || true
+
+      - name: Remove temporary cleanup workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/v3k-close-cleanup.yml
+          git commit -m "chore: remove temporary V3K cleanup workflow"
+          git push origin HEAD:main
