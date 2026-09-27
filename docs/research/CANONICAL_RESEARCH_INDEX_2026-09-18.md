@@ -84,6 +84,7 @@ Current reusable benchmarks:
 - `docs/research/POST_V3K_PNSUM_ALLOCATION_ROOT_CAUSE_2026-09-27.md` — post-V3K causal audit: path-dependent coupling between frontier perturbations, PNSum allocation and cumulative visit ranking explains the V3K B3 failures and strongly matches the mirrored B2/B4 instability.
 - `docs/research/V3L_ROOT_NEUTRAL_PNSUM_REJECTION_2026-09-27.md` — root-neutral PNSum removed the audited B2/B4 transient allocation basins but regressed both mirrored B3 pairs at Quan Gia 5k; targeted confirmation reproduced both 0W-0D-2L.
 - `docs/research/V3M_ROOT_Q_CONFLICT_GUARD_REJECTION_2026-09-28.md` — qGap=0.10 root guard fixed the audited B2/B4 flips and preserved the audited B3 5k state, but full Quan Gia 5k still regressed B3:CW/B3:CCW; both reproduced 0W-0D-2L. Postmortem showed immediate fresh-root responder divergence, proving instantaneous Q gating creates a new path-dependent allocation basin.
+- `docs/research/V3N_ADAPTIVE_SIMULATION_EXTENSION_NO_GAIN_2026-09-28.md` — adaptive 5k->10k continuation was bit-equivalent to fixed 10k on audited unstable roots and cost only 5,119 sims/decision on average, but the Quan Gia gate was fully neutral (0 favorable / 10 neutral / 0 unfavorable).
 - `docs/research/HISTORICAL_RESEARCH_SUMMARY_2026-09-21.md` — consolidated removed history.
 - `docs/r1a-production-parity-audit.md` — production parity evidence.
 
@@ -112,6 +113,7 @@ Current reusable benchmarks:
 - Post-V3K root-cause audit: generic near-tie roots are not sufficient; V3K-B3 requires one-ply × PNSum interaction, subtree reuse only accelerates the basin switch, and future challengers must separate standalone benefit from PNSum composition safety.
 - V3L root-neutral PNSum: closed at Quan Gia 5k. It fixed the targeted B2/B4 allocation pathology but produced B3:CW and B3:CCW unfavorable pairs; both reproduced 0W-0D-2L in targeted confirmation. Root PNSum is not globally removable without losing incumbent B3 strength.
 - V3M root Q-conflict guard: closed at Quan Gia 5k. The preregistered qGap=0.10 guard fixed B2/B4 diagnostics but reproduced mirrored B3 regressions. Static instantaneous root-Q threshold rescue is closed; do not sweep the threshold.
+- V3N adaptive simulation extension: closed for no gain. Margin<=0.10 triggered only 10/420 candidate decisions (2.38%), mean cost 5,119 sims/decision, and all 10 Quan Gia opening pairs were neutral. Do not rescue by sweeping margin or extension budget.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
