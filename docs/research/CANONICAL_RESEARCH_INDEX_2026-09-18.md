@@ -81,6 +81,7 @@ Current reusable benchmarks:
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md` — rejected positional repetition variant.
 - `docs/research/V3J_POLICY_PRIOR_ALIGNMENT_NO_GAIN_2026-09-27.md` — aligned policy-prior score gating to V3A.2; closed after a fully neutral Quan Gia 5k screen with no regression and no gain.
 - `docs/research/V3K_TARGET_MODE_ONE_PLY_REJECTION_2026-09-27.md` — target-mode one-ply adversarial leaf bootstrap rejected after repeatable Pie and Quan Gia regressions at 5k.
+- `docs/research/POST_V3K_PNSUM_ALLOCATION_ROOT_CAUSE_2026-09-27.md` — post-V3K causal audit: path-dependent coupling between frontier perturbations, PNSum allocation and cumulative visit ranking explains the V3K B3 failures and strongly matches the mirrored B2/B4 instability.
 - `docs/research/HISTORICAL_RESEARCH_SUMMARY_2026-09-21.md` — consolidated removed history.
 - `docs/r1a-production-parity-audit.md` — production parity evidence.
 
@@ -106,6 +107,7 @@ Current reusable benchmarks:
 - V3I First Play Urgency: closed after r=0.1/0.3 reproduced B2:CCW regressions and r=0.5 produced 10/10 neutral pairs with no gain.
 - V3J policy-prior alignment: closed after the Quan Gia 5k gate was completely neutral (10W-0D-10L; 0 favorable / 10 neutral / 0 unfavorable / 0 unresolved pairs).
 - V3K target-mode one-ply leaf bootstrap: closed after Pie reproduced B2:CCW and B4:CW regressions and Quan Gia reproduced B3:CW and B3:CCW regressions at 5k; no 10k escalation.
+- Post-V3K root-cause audit: generic near-tie roots are not sufficient; V3K-B3 requires one-ply × PNSum interaction, subtree reuse only accelerates the basin switch, and future challengers must separate standalone benefit from PNSum composition safety.
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
