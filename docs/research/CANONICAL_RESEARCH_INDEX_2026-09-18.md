@@ -1,4 +1,4 @@
-# Canonical Research Index — 2026-09-21
+# Canonical Research Index — 2026-09-27
 
 The canonical branch is `main`. Temporary research branches are disposable and must not be treated as canonical after evidence is consolidated.
 
@@ -79,6 +79,7 @@ Current reusable benchmarks:
 - `docs/research/V4_QUIESCENCE_FAMILY_CLOSED_2026-09-18.md` — Standard-only failed V4 family.
 - `docs/research/V5_TRANSPOSITION_GRAPH_REJECTION_2026-09-19.md` — Standard-only failed V5 family.
 - `docs/research/QG_POSITIONAL_THREEFOLD_VERDICT_2026-09-18.md` — rejected positional repetition variant.
+- `docs/research/V3J_POLICY_PRIOR_ALIGNMENT_NO_GAIN_2026-09-27.md` — aligned policy-prior score gating to V3A.2; closed after a fully neutral Quan Gia 5k screen with no regression and no gain.
 - `docs/research/HISTORICAL_RESEARCH_SUMMARY_2026-09-21.md` — consolidated removed history.
 - `docs/r1a-production-parity-audit.md` — production parity evidence.
 
@@ -102,6 +103,7 @@ Current reusable benchmarks:
 - V3G visit-adaptive PUCT: closed after a non-regressive but fully neutral Quan Gia 5k gate; no 10k escalation.
 - V3H local RAVE/AMAF: closed after every preregistered k produced unfavorable Quan Gia pairs; common B2:CCW regression reproduced for k=100/500/1000.
 - V3I First Play Urgency: closed after r=0.1/0.3 reproduced B2:CCW regressions and r=0.5 produced 10/10 neutral pairs with no gain.
+- V3J policy-prior alignment: closed after the Quan Gia 5k gate was completely neutral (10W-0D-10L; 0 favorable / 10 neutral / 0 unfavorable / 0 unresolved pairs).
 - Old MCTS/ordering/opening/R1 intermediates: consolidated and removed.
 - Positional-threefold variant: closed.
 
