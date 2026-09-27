@@ -1,0 +1,37 @@
+name: temporary-actions-prune
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/actions-prune.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Delete redundant completed runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in             36299395209 36299395148 36299361570 36299358814 36299356836             36299271001 36299188564 36299084434 36299076260 36299021815             36293737769 36293440965 36293440933 36293395434             36293193695 36293112514             36268881612 36268881586 36268864063 36268859506
+          do
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/runs/$id" || true
+          done
+
+      - name: Remove temporary prune workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/actions-prune.yml
+          git commit -m "chore: remove temporary actions prune workflow"
+          git push origin HEAD:main
