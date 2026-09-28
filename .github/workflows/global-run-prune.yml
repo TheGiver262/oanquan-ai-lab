@@ -1,0 +1,41 @@
+name: temporary-global-run-prune
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/global-run-prune.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const ids = [
+              36454292826,36454292822,36454156604,36454136168,36454011752,
+              36453997363,36453984808,36453970434,36453950170,36453926295,
+              36453717024,36453698975,36453655600,36453641471,36453627060,
+              36453609842,36451946761,36451202159,36451194174,36451021829,
+              36450929663,36450805245,36436884016,36436883975,36436865419,
+              36436848576,36436813886,36435958964,36338935764,36338903422,
+              36338903421,36338853268,36337265596,36337233834,36337233647,
+              36337101814
+            ];
+            for (const run_id of ids) {
+              try {
+                await github.rest.actions.deleteWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id,
+                });
+              } catch (error) {
+                core.warning(`Could not delete run ${run_id}: ${error.message}`);
+              }
+            }
