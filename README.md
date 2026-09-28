@@ -4,27 +4,30 @@ Lean research lab for **Ô Ăn Quan** AI. Production web/app code is intentional
 
 ## Current research target
 
-Canonical evaluation modes:
-- **Primary:** `quan-gia-threefold`
-- **Reference:** `pie-threefold`
-- **Reference:** `standard`
+All three supported modes are now mandatory global evaluation gates:
+- `standard`
+- `pie-threefold`
+- `quan-gia-threefold`
 
-Future AI research is optimized and judged primarily on **Quan Gia + Threefold**.
-Pie + Threefold and Standard remain comparison/reference modes and no longer
-have equal veto power over promotion decisions.
+A future global challenger must satisfy **wins >= losses against the current baseline/incumbent in every mode independently**. A gain in one ruleset no longer compensates for a regression in another.
 
 ## Current incumbent
 
-**Primary mode — Quan Gia + Threefold:** **PUCT V3B.1 PNSum Cpn=2.0**.
+**Global incumbent: PUCT V3B.1-G (Global Safe).**
 
-Primary promotion evidence vs V3A.2:
-- 5k: 6 favorable / 4 neutral / **0 unfavorable** pairs;
-- 10k: 4 favorable / 6 neutral / **0 unfavorable** pairs;
-- 20k: 4 favorable / 6 neutral / **0 unfavorable** pairs;
-- 50k: 2 favorable / 8 neutral / **0 unfavorable** pairs;
-- no unresolved games in the promoted Cpn=2.0 primary gates.
+Ruleset-aware configuration:
+- Quan Gia + Threefold -> V3B.1 PNSum `Cpn=2.0`;
+- Pie + Threefold -> V3A.2 semantics / `Cpn=0`;
+- Standard -> V3A.2 semantics / `Cpn=0`.
 
-**Reference modes — Pie + Threefold / Standard:** retain **V3A.2 positive-only material36** as the comparison baseline. V3B.1 regressed on these reference modes and is not claimed as a universal replacement.
+Global evidence vs V3A.2:
+
+| Budget | Standard | Pie + Threefold | Quan Gia + Threefold |
+| --- | --- | --- | --- |
+| 10k | **8W-4D-8L** | **6W-8D-6L** | **14W-0D-6L** |
+| 20k | **6W-4D-6L** + 4 unresolved | **6W-8D-6L** | **14W-0D-6L** |
+
+Thus V3B.1-G keeps the validated Quan Gia improvement while never losing more games than it wins against V3A.2 on Pie or Standard.
 
 PVS/NegaScout remains excluded from active research.
 
@@ -39,17 +42,18 @@ npm run build
 
 ## Canonical benchmarks
 
-Primary Quan Gia incumbent vs V3A.2:
+Global incumbent vs V3A.2:
+
+```bash
+npm run benchmark:global -- --mode standard --fixed-simulations 10000
+npm run benchmark:global -- --mode pie-threefold --fixed-simulations 10000
+npm run benchmark:global -- --mode quan-gia-threefold --fixed-simulations 10000
+```
+
+Quan Gia V3B.1 specialist benchmark remains available:
 
 ```bash
 npm run benchmark:primary -- --fixed-simulations 10000
-```
-
-V3A.2 reference benchmark:
-
-```bash
-npm run benchmark:target-modes -- --mode pie-threefold --fixed-simulations 10000
-npm run benchmark:target-modes -- --mode quan-gia-threefold --fixed-simulations 10000
 ```
 
 Pie ownership follows research-agent identity through SWAP.
@@ -79,6 +83,7 @@ commit 73c698762c514d171869a79982fdc86103653e8f
 - `docs/research/V3A5_VISIT_DECAYED_IMPLICIT_MINIMAX_REJECTION_2026-09-24.md`
 - `docs/research/V3B_PNMAX_REJECTION_2026-09-24.md`
 - `docs/research/V3B1_PNSUM_PROMOTION_2026-09-24.md`
+- `docs/research/V3B1_GLOBAL_SAFE_PROMOTION_2026-09-28.md`
 - `docs/research/V3B2_SCORE_BOUNDED_NO_GAIN_2026-09-24.md`
 - `docs/research/V3B3_MOBILITY_PROOF_INIT_REJECTION_2026-09-24.md`
 - `docs/research/V3B4_PNRANK_REJECTION_2026-09-24.md`
@@ -108,7 +113,7 @@ commit 73c698762c514d171869a79982fdc86103653e8f
 - Delete one-off benchmark scripts/workflows/runs after consolidation.
 - `results/` stays empty except for `.gitkeep`.
 - `.github/workflows/ci.yml` is the only persistent workflow.
-- Future promotion is decided primarily on `quan-gia-threefold`; `pie-threefold` and `standard` are secondary reference checks.
+- Future global promotion requires `wins >= losses` independently on Standard, Pie + Threefold, and Quan Gia + Threefold.
 - Unresolved games are censored, never heuristic-adjudicated.
 
 ## License
