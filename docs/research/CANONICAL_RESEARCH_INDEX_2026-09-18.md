@@ -31,6 +31,7 @@ Final 50k aggregate: **12W-0D-8L**, with `B3:CW` and `B3:CCW` favorable and all 
 
 Canonical record:
 - `docs/research/V3B1_PNSUM_PROMOTION_2026-09-24.md`
+- `docs/research/V3B1_THREE_MODE_10K_RETEST_2026-09-28.md` — fresh 10k retest reproduced the prior V3B.1 aggregate results exactly across Quan Gia, Pie and Standard; reinforces the mode-specific incumbent scope.
 
 ### Reference modes
 
