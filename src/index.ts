@@ -9,3 +9,4 @@ export * from "./research/puct-v3a1.js";
 export * from "./research/mode-aware-puct-v3a.js";
 export * from "./research/mode-aware-puct-v3a1.js";
 export * from "./research/mode-aware-puct-v3a2.js";
+export * from "./research/mode-aware-puct-v3b1-global.js";
