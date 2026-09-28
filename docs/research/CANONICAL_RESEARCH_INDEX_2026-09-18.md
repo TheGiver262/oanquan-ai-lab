@@ -4,40 +4,42 @@ The canonical branch is `main`. Temporary research branches are disposable and m
 
 ## Forward evaluation protocol
 
-Canonical mode priority:
-1. **Primary:** `quan-gia-threefold`
-2. **Reference:** `pie-threefold`
-3. **Reference:** `standard`
+All three modes are mandatory global gates:
+1. `standard`
+2. `pie-threefold`
+3. `quan-gia-threefold`
 
-Future AI promotion/rejection decisions are driven primarily by Quan Gia +
-Threefold. Pie + Threefold and Standard are retained as secondary comparison
-modes, but a regression there alone does not automatically veto a challenger
-that is clearly stronger and stable on the primary mode. Any severe
-cross-mode correctness or stability regression must still be reported.
+A global challenger must satisfy **wins >= losses independently in every mode** against the relevant incumbent/baseline. Strength gained in one mode cannot compensate for a regression in another.
 
 ## Current incumbent
 
-### Primary: Quan Gia + Threefold
+### Global: V3B.1-G
 
-**PUCT V3B.1 PNSum Cpn=2.0** is the canonical primary-mode incumbent.
+**PUCT V3B.1-G (Global Safe)** is the canonical global incumbent.
 
-Promotion evidence vs V3A.2:
-- 5k: 6 favorable / 4 neutral / 0 unfavorable / 0 unresolved pairs;
-- 10k: 4 / 6 / 0 / 0;
-- 20k: 4 / 6 / 0 / 0;
-- 50k: 2 / 8 / 0 / 0.
+Ruleset-aware behavior:
+- Quan Gia + Threefold -> V3B.1 PNSum Cpn=2.0;
+- Pie + Threefold -> V3A.2 / Cpn=0;
+- Standard -> V3A.2 / Cpn=0.
 
-Final 50k aggregate: **12W-0D-8L**, with `B3:CW` and `B3:CCW` favorable and all other opening pairs neutral.
+10k vs V3A.2:
+- Standard: **8W-4D-8L**
+- Pie: **6W-8D-6L**
+- Quan Gia: **14W-0D-6L**
 
-Canonical record:
-- `docs/research/V3B1_PNSUM_PROMOTION_2026-09-24.md`
-- `docs/research/V3B1_THREE_MODE_10K_RETEST_2026-09-28.md` — fresh 10k retest reproduced the prior V3B.1 aggregate results exactly across Quan Gia, Pie and Standard; reinforces the mode-specific incumbent scope.
+20k confirmation:
+- Standard: **6W-4D-6L** + 4 unresolved
+- Pie: **6W-8D-6L**
+- Quan Gia: **14W-0D-6L**
 
-### Reference modes
+All three modes satisfy wins >= losses at both gates.
 
-**V3A.2 positive-only material36** remains the Pie + Threefold / general comparison baseline because V3B.1 regressed on Pie and Standard at the 10k reference check.
+Canonical records:
+- `docs/research/V3B1_GLOBAL_SAFE_PROMOTION_2026-09-28.md`
+- `docs/research/V3B1_PNSUM_PROMOTION_2026-09-24.md` — retained Quan Gia specialist evidence.
+- `docs/research/V3B1_THREE_MODE_10K_RETEST_2026-09-28.md` — evidence that raw V3B.1 Cpn=2.0 is not globally safe.
 
-Standard's older historical V3A.1 evidence remains historical; no V3B.1 Standard promotion is claimed.
+V3A.2 and V3B.1 remain retained as component/reference implementations.
 
 ## Retained implementation
 
@@ -47,6 +49,7 @@ Standard's older historical V3A.1 evidence remains historical; no V3B.1 Standard
 - `src/research/mode-aware-puct-v3a1.ts`
 - `src/research/mode-aware-puct-v3a2.ts`
 - `src/research/mode-aware-puct-v3b1.ts`
+- `src/research/mode-aware-puct-v3b1-global.ts`
 - `src/research/balance-modes.ts`
 
 ## Retained correctness guards
@@ -57,12 +60,14 @@ Standard's older historical V3A.1 evidence remains historical; no V3B.1 Standard
 - `tests/puct-v3a1.test.ts`
 - `tests/mode-aware-puct-v3a.test.ts`
 - `tests/mode-aware-puct-v3b1.test.ts`
+- `tests/mode-aware-puct-v3b1-global.test.ts`
 - `tests/balance-modes.test.ts`
 - `tests/quan-gia-threefold.test.ts`
 - `tests/server-production-parity.test.ts`
 
 Current reusable benchmarks:
-- `src/benchmarks/v3b1-pnsum-screen.ts` — primary Quan Gia incumbent vs V3A.2.
+- `src/benchmarks/v3b1-global-screen.ts` — global V3B.1-G vs V3A.2 across any supported mode.
+- `src/benchmarks/v3b1-pnsum-screen.ts` — Quan Gia V3B.1 specialist vs V3A.2.
 - `src/benchmarks/target-mode-v3a2-selfplay.ts` — V3A.2 reference benchmark.
 
 ## Retained evidence
