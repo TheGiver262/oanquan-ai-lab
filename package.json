@@ -3,7 +3,7 @@
   "version": "0.8.0",
   "private": false,
   "type": "module",
-  "description": "Lean Ô Ăn Quan AI research lab with V3B.1 PNSum as the Quan Gia + Threefold incumbent.",
+  "description": "Lean Ô Ăn Quan AI research lab with V3B.1-G as the global three-mode incumbent.",
   "license": "MIT",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -17,7 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "cli": "tsx src/cli.ts",
     "benchmark:target-modes": "tsx src/benchmarks/target-mode-v3a2-selfplay.ts",
-    "benchmark:primary": "tsx src/benchmarks/v3b1-pnsum-screen.ts --mode quan-gia-threefold --cpn 2.0"
+    "benchmark:primary": "tsx src/benchmarks/v3b1-pnsum-screen.ts --mode quan-gia-threefold --cpn 2.0",
+    "benchmark:global": "tsx src/benchmarks/v3b1-global-screen.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
